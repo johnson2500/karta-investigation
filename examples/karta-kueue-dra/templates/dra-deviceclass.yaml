@@ -1,0 +1,19 @@
+{{- if and .Values.dra.enabled .Values.dra.createDeviceClass }}
+# DRA DeviceClass — cluster-scoped device category selected by ResourceClaimTemplates.
+# Role: name/selectors that DRA drivers and Kueue deviceClassMappings agree on
+#       (here: gpu.example.com → logical quota example.com/gpu).
+# Stakeholder note: illustrative for helm template / dry-run; on OpenShift prefer the
+# DeviceClass your GPU DRA driver publishes (e.g. gpu.nvidia.com) and set
+# dra.createDeviceClass=false so this chart does not own the class.
+apiVersion: resource.k8s.io/v1
+kind: DeviceClass
+metadata:
+  name: {{ .Values.dra.deviceClass.name }}
+  labels:
+    {{- include "karta-kueue-dra.labels" . | nindent 4 }}
+spec:
+  selectors:
+    - cel:
+        # Match devices advertised by the named DRA driver in ResourceSlices.
+        expression: device.driver == {{ .Values.dra.deviceClass.driver | quote }}
+{{- end }}

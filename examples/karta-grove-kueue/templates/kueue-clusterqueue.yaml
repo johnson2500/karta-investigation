@@ -1,0 +1,23 @@
+{{- if .Values.kueue.enabled }}
+# Cluster-wide quota pool. LocalQueues spend against this.
+apiVersion: kueue.x-k8s.io/v1beta1
+kind: ClusterQueue
+metadata:
+  name: {{ .Values.kueue.clusterQueue.name }}
+  labels:
+    {{- include "karta-grove-kueue.labels" . | nindent 4 }}
+spec:
+  # {} = available to all namespaces that point a LocalQueue here.
+  namespaceSelector: {}
+  resourceGroups:
+    - coveredResources:
+        - cpu
+        - memory
+      flavors:
+        - name: {{ .Values.kueue.resourceFlavor.name }}
+          resources:
+            - name: cpu
+              nominalQuota: {{ .Values.kueue.clusterQueue.nominalQuota.cpu | quote }}
+            - name: memory
+              nominalQuota: {{ .Values.kueue.clusterQueue.nominalQuota.memory | quote }}
+{{- end }}

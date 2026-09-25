@@ -1,0 +1,60 @@
+{{- if .Values.kueue.enabled }}
+{{- range .Values.kueue.sampleJobs }}
+{{- if .enabled }}
+---
+# One of kueue.sampleJobs — admitted by Kueue, mapped by the grove-kueue-batch-job-v1 Karta.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ .name }}
+  labels:
+    {{- include "karta-grove-kueue.labels" $ | nindent 4 }}
+    # Routes this Job to the LocalQueue (required for Kueue admission).
+    kueue.x-k8s.io/queue-name: {{ $.Values.kueue.localQueue.name }}
+    {{- with .labels }}
+    # Extra labels (e.g. app.openshift.io/runtime on the OpenShift sample).
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+  {{- with .annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  # Kueue holds the Job here until the ClusterQueue has quota.
+  suspend: true
+  template:
+    metadata:
+      labels:
+        {{- include "karta-grove-kueue.selectorLabels" $ | nindent 8 }}
+        {{- with .labels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      restartPolicy: Never
+      {{- if .openshiftRestricted }}
+      # OpenShift restricted-v2–compatible pod security.
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      {{- end }}
+      containers:
+        - name: worker
+          image: {{ .image | quote }}
+          command:
+            {{- toYaml .command | nindent 12 }}
+          resources:
+            {{- toYaml .resources | nindent 12 }}
+          {{- if .openshiftRestricted }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            runAsNonRoot: true
+            seccompProfile:
+              type: RuntimeDefault
+          {{- end }}
+{{- end }}
+{{- end }}
+{{- end }}

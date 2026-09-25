@@ -1,0 +1,107 @@
+{{- if .Values.pytorchJob.enabled }}
+# PyTorchJob bound by the default kube-scheduler (or OpenShift default) — no KAI.
+# Container is a lightweight placeholder (busybox/sleep by default). Swap image/command
+# in values.yaml for real training; raise memory (≥1Gi) if using a PyTorch image.
+apiVersion: kubeflow.org/v1
+kind: PyTorchJob
+metadata:
+  name: {{ .Values.pytorchJob.name }}
+  labels:
+    {{- include "karta-decoupled-scheduler.labels" . | nindent 4 }}
+    app.openshift.io/runtime: pytorch
+  annotations:
+    # Illustrative PodGroup contract metadata that EWI / WG WAS consumers would
+    # derive from the Karta map (gang name + member roles). Not a KAI dependency.
+    karta.run.ai/podgroup-name: {{ .Values.pytorchJob.name }}-job
+    karta.run.ai/podgroup-members: master,worker
+spec:
+  {{- if .Values.pytorchJob.schedulerName }}
+  runPolicy:
+    schedulingPolicy:
+      # Only set when pointing at vanilla Volcano (still not KAI).
+      scheduleTimeoutSeconds: 100
+  {{- end }}
+  pytorchReplicaSpecs:
+    Master:
+      replicas: {{ .Values.pytorchJob.master.replicas }}
+      restartPolicy: OnFailure
+      template:
+        metadata:
+          labels:
+            {{- include "karta-decoupled-scheduler.selectorLabels" . | nindent 12 }}
+          annotations:
+            karta.run.ai/component: master
+        spec:
+          {{- if .Values.pytorchJob.schedulerName }}
+          schedulerName: {{ .Values.pytorchJob.schedulerName | quote }}
+          {{- end }}
+          {{- if .Values.pytorchJob.openshiftRestricted }}
+          securityContext:
+            runAsNonRoot: true
+            seccompProfile:
+              type: RuntimeDefault
+          {{- end }}
+          containers:
+            - name: pytorch
+              image: {{ .Values.pytorchJob.image | quote }}
+              command:
+                {{- toYaml .Values.pytorchJob.command | nindent 16 }}
+              resources:
+                requests:
+                  cpu: {{ .Values.pytorchJob.master.cpu | quote }}
+                  memory: {{ .Values.pytorchJob.master.memory | quote }}
+                limits:
+                  cpu: {{ .Values.pytorchJob.master.cpu | quote }}
+                  memory: {{ .Values.pytorchJob.master.memory | quote }}
+              {{- if .Values.pytorchJob.openshiftRestricted }}
+              securityContext:
+                allowPrivilegeEscalation: false
+                capabilities:
+                  drop:
+                    - ALL
+                runAsNonRoot: true
+                seccompProfile:
+                  type: RuntimeDefault
+              {{- end }}
+    Worker:
+      replicas: {{ .Values.pytorchJob.worker.replicas }}
+      restartPolicy: OnFailure
+      template:
+        metadata:
+          labels:
+            {{- include "karta-decoupled-scheduler.selectorLabels" . | nindent 12 }}
+          annotations:
+            karta.run.ai/component: worker
+        spec:
+          {{- if .Values.pytorchJob.schedulerName }}
+          schedulerName: {{ .Values.pytorchJob.schedulerName | quote }}
+          {{- end }}
+          {{- if .Values.pytorchJob.openshiftRestricted }}
+          securityContext:
+            runAsNonRoot: true
+            seccompProfile:
+              type: RuntimeDefault
+          {{- end }}
+          containers:
+            - name: pytorch
+              image: {{ .Values.pytorchJob.image | quote }}
+              command:
+                {{- toYaml .Values.pytorchJob.command | nindent 16 }}
+              resources:
+                requests:
+                  cpu: {{ .Values.pytorchJob.worker.cpu | quote }}
+                  memory: {{ .Values.pytorchJob.worker.memory | quote }}
+                limits:
+                  cpu: {{ .Values.pytorchJob.worker.cpu | quote }}
+                  memory: {{ .Values.pytorchJob.worker.memory | quote }}
+              {{- if .Values.pytorchJob.openshiftRestricted }}
+              securityContext:
+                allowPrivilegeEscalation: false
+                capabilities:
+                  drop:
+                    - ALL
+                runAsNonRoot: true
+                seccompProfile:
+                  type: RuntimeDefault
+              {{- end }}
+{{- end }}

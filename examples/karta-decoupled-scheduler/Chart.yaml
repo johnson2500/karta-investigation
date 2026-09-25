@@ -1,0 +1,6 @@
+apiVersion: v2
+name: karta-decoupled-scheduler
+description: Prove Karta runs without KAI — schema translation + default kube-scheduler
+type: application
+version: 0.1.0
+appVersion: "0.1.0"

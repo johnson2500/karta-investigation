@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>{% block title %}Karta demo gallery{% endblock %}</title>
+  <link rel="stylesheet" href="/static/style.css" />
+  <script src="https://unpkg.com/htmx.org@2.0.4" integrity="sha384-HGfztofotfshcF7+8n44JQL2oJmowVChPTg48S+jvZoztPfvwD79OC/LTtG6dMp+" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+</head>
+<body>
+  <header class="site-header">
+    <a class="brand" href="/">Karta demo gallery</a>
+    <p class="tagline">Step through examples one-by-one. Operators are shared; sample CRs apply on demand.</p>
+  </header>
+  <main class="site-main">
+    {% block content %}{% endblock %}
+  </main>
+  <footer class="site-footer">
+    <p>Guided gallery — no click-to-apply. Copy Helm commands from each demo page.</p>
+  </footer>
+  <script>
+    (function () {
+      if (typeof mermaid === "undefined") return;
+      mermaid.initialize({
+        startOnLoad: false,
+        theme: "dark",
+        securityLevel: "loose",
+        flowchart: { htmlLabels: true, curve: "basis" },
+      });
+      function renderMermaid() {
+        document.querySelectorAll(".md-body pre code.language-mermaid").forEach(function (code) {
+          var pre = code.parentElement;
+          if (!pre || pre.tagName !== "PRE") return;
+          var div = document.createElement("div");
+          div.className = "mermaid";
+          div.textContent = code.textContent;
+          pre.replaceWith(div);
+        });
+        mermaid.run({ querySelector: ".md-body .mermaid" });
+      }
+      if (document.readyState === "loading") {
+        document.addEventListener("DOMContentLoaded", renderMermaid);
+      } else {
+        renderMermaid();
+      }
+    })();
+  </script>
+</body>
+</html>

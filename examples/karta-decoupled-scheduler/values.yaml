@@ -1,0 +1,60 @@
+# Sample CRs only. Install operators first via scripts/install-operators.sh.
+# Intentionally NO KAI / volcano / Grove dependencies.
+
+nameOverride: ""
+fullnameOverride: ""
+
+karta:
+  enabled: true
+  # PyTorchJob map — compound CRD without requiring KAI at runtime.
+  pytorchJob:
+    enabled: true
+    name: kubeflow-org-pytorchjob-v1
+  # Optional second map so demos can swap frameworks without reinstalling Karta.
+  rayJob:
+    enabled: false
+    # Chart-prefixed: cluster-scoped Karta CRs cannot be shared across Helm releases.
+    name: decoupled-ray-io-rayjob-v1
+
+pytorchJob:
+  enabled: true
+  name: pytorchjob-default-scheduler
+  # Lightweight placeholder — this demo proves scheduling, not training.
+  # Real MNIST (kubeflowkatib/pytorch-mnist) needs ~1Gi+; 128Mi → OOMKilled.
+  image: busybox:1.36
+  command:
+    - /bin/sh
+    - -c
+    - echo decoupled-scheduler-ok && sleep 3600
+  # Leave empty to use the cluster default scheduler (kube-scheduler / OpenShift default).
+  # Set to "volcano" only if you intentionally install vanilla Volcano (still not KAI).
+  schedulerName: ""
+  master:
+    replicas: 1
+    cpu: "100m"
+    memory: 64Mi
+  worker:
+    replicas: 1
+    cpu: "100m"
+    memory: 64Mi
+  openshiftRestricted: true
+
+# Optional RayJob path (enable with --set rayJob.enabled=true,karta.rayJob.enabled=true).
+rayJob:
+  enabled: false
+  name: rayjob-default-scheduler
+  image: rayproject/ray:2.46.0-py312
+  entrypoint: python -c "import ray; ray.init(); print('decoupled-ok'); ray.shutdown()"
+  shutdownAfterJobFinishes: true
+  ttlSecondsAfterFinished: 120
+  head:
+    cpu: "500m"
+    memory: 1Gi
+  worker:
+    groupName: small-group
+    replicas: 1
+    minReplicas: 1
+    maxReplicas: 1
+    cpu: "500m"
+    memory: 1Gi
+  openshiftRestricted: true

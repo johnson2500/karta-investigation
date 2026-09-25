@@ -1,0 +1,23 @@
+Karta + Kueue admission showcase ({{ .Release.Name }})
+
+Three-layer stack in namespace {{ .Release.Namespace }}:
+  Layer 1 Admission (Kueue) → Layer 2 Translation (Karta) → Layer 3 Placement
+
+{{- if and .Values.karta.enabled .Values.karta.rayJob.enabled }}
+  - Karta map: {{ .Values.karta.rayJob.name }}
+{{- end }}
+{{- if .Values.kueue.enabled }}
+  - ClusterQueue: {{ .Values.kueue.clusterQueue.name }} (GPU quota {{ index .Values.kueue.clusterQueue.nominalQuota "nvidia.com/gpu" }})
+  - LocalQueue: {{ .Values.kueue.localQueue.name }}
+{{- end }}
+{{- range .Values.rayJobs }}
+{{- if .enabled }}
+  - RayJob: {{ .name }} ({{ .gpus }} GPU request)
+{{- end }}
+{{- end }}
+
+Demo checks:
+  oc get clusterqueue {{ .Values.kueue.clusterQueue.name }}
+  oc get workloads -n {{ .Release.Namespace }}
+  oc get rayjob -n {{ .Release.Namespace }}
+  oc get karta {{ .Values.karta.rayJob.name }} -o yaml | head -60

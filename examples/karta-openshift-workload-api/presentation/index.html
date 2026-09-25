@@ -1,0 +1,1184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Karta + Grove + Workload API — Bypass KAI</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #0f1419;
+      --bg-elevated: #1a222c;
+      --bg-panel: #232d3a;
+      --fg: #e8eef4;
+      --fg-muted: #9aabbc;
+      --accent: #2dd4bf;
+      --accent-dim: #14b8a6;
+      --warn: #f59e0b;
+      --admit: #34d399;
+      --queued: #fbbf24;
+      --rh: #ee0000;
+      --runai: #3d8b5a;
+      --border: #2e3a48;
+      --slide-pad: clamp(1.5rem, 4vw, 3.5rem);
+      --font: "IBM Plex Sans", "Segoe UI", sans-serif;
+      --mono: "IBM Plex Mono", ui-monospace, monospace;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html, body {
+      height: 100%;
+      background: var(--bg);
+      color: var(--fg);
+      font-family: var(--font);
+      overflow: hidden;
+    }
+
+    body::before {
+      content: "";
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      z-index: 0;
+      background:
+        radial-gradient(ellipse 80% 50% at 10% 0%, rgba(45, 212, 191, 0.07), transparent 55%),
+        radial-gradient(ellipse 60% 40% at 90% 100%, rgba(20, 184, 166, 0.05), transparent 50%),
+        repeating-linear-gradient(
+          -12deg,
+          transparent,
+          transparent 48px,
+          rgba(255, 255, 255, 0.012) 48px,
+          rgba(255, 255, 255, 0.012) 49px
+        );
+    }
+
+    .deck { position: relative; z-index: 1; height: 100%; width: 100%; }
+
+    .slide {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      padding: var(--slide-pad);
+      padding-bottom: calc(var(--slide-pad) + 3.5rem);
+      opacity: 0;
+      visibility: hidden;
+      transform: translateX(1.5rem);
+      transition: opacity 0.35s ease, transform 0.35s ease, visibility 0.35s;
+      max-width: 1140px;
+      margin: 0 auto;
+      width: 100%;
+    }
+
+    .slide.active { opacity: 1; visibility: visible; transform: translateX(0); }
+    .slide.prev-out { transform: translateX(-1.5rem); }
+
+    .eyebrow {
+      font-size: 0.8rem;
+      font-weight: 600;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--accent);
+      margin-bottom: 0.6rem;
+    }
+
+    h1 {
+      font-size: clamp(2rem, 4.2vw, 3.2rem);
+      font-weight: 700;
+      line-height: 1.15;
+      letter-spacing: -0.02em;
+      margin-bottom: 0.85rem;
+    }
+
+    h2 {
+      font-size: clamp(1.55rem, 3.2vw, 2.35rem);
+      font-weight: 700;
+      line-height: 1.2;
+      letter-spacing: -0.02em;
+      margin-bottom: 1rem;
+    }
+
+    .lede {
+      font-size: clamp(1rem, 1.8vw, 1.25rem);
+      color: var(--fg-muted);
+      line-height: 1.5;
+      max-width: 44rem;
+    }
+
+    .lede strong { color: var(--fg); font-weight: 600; }
+
+    a.link {
+      color: var(--accent);
+      text-decoration: underline;
+      text-underline-offset: 3px;
+    }
+
+    ul.bullets {
+      list-style: none;
+      margin-top: 1rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.7rem;
+    }
+
+    ul.bullets li {
+      font-size: clamp(0.98rem, 1.6vw, 1.15rem);
+      line-height: 1.4;
+      padding-left: 1.25rem;
+      position: relative;
+    }
+
+    ul.bullets li::before {
+      content: "";
+      position: absolute;
+      left: 0;
+      top: 0.5em;
+      width: 0.45rem;
+      height: 0.45rem;
+      background: var(--accent);
+    }
+
+    ul.bullets li code,
+    .mono,
+    code {
+      font-family: var(--mono);
+      font-size: 0.9em;
+      color: var(--accent);
+    }
+
+    .answer-yes {
+      display: inline-block;
+      margin-top: 1.25rem;
+      font-size: clamp(1.75rem, 3.5vw, 2.6rem);
+      font-weight: 700;
+      color: var(--accent);
+    }
+
+    .answer-nuance {
+      margin-top: 0.75rem;
+      font-size: clamp(1rem, 1.7vw, 1.15rem);
+      color: var(--fg-muted);
+      max-width: 42rem;
+      line-height: 1.45;
+    }
+
+    .question-box {
+      margin-top: 1.25rem;
+      padding: 1.1rem 1.35rem;
+      background: var(--bg-elevated);
+      border-left: 4px solid var(--accent);
+      font-size: clamp(1.05rem, 2vw, 1.3rem);
+      line-height: 1.45;
+      font-style: italic;
+      max-width: 42rem;
+    }
+
+    .layers {
+      display: flex;
+      flex-direction: column;
+      gap: 0.55rem;
+      margin-top: 1.25rem;
+      max-width: 38rem;
+    }
+
+    .layer {
+      display: grid;
+      grid-template-columns: 5.5rem 1fr;
+      gap: 1rem;
+      align-items: center;
+      padding: 0.8rem 1rem;
+      background: var(--bg-elevated);
+      border: 1px solid var(--border);
+    }
+
+    .layer-num {
+      font-family: var(--mono);
+      font-size: 0.7rem;
+      font-weight: 500;
+      letter-spacing: 0.06em;
+      color: var(--accent);
+    }
+
+    .layer-body strong { display: block; font-size: 1rem; margin-bottom: 0.1rem; }
+    .layer-body span { font-size: 0.85rem; color: var(--fg-muted); }
+
+    .obj-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 0.55rem;
+      margin-top: 0.75rem;
+    }
+
+    .obj-card {
+      padding: 0.65rem 0.8rem;
+      background: var(--bg-elevated);
+      border: 1px solid var(--border);
+      border-top: 3px solid var(--accent-dim);
+    }
+
+    .obj-card.layer1 { border-top-color: #60a5fa; }
+    .obj-card.layer2 { border-top-color: var(--accent); }
+    .obj-card.layer3 { border-top-color: #c084fc; }
+    .obj-card.app { border-top-color: var(--admit); }
+
+    .obj-card .kind {
+      font-family: var(--mono);
+      font-size: 0.6rem;
+      color: var(--fg-muted);
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      margin-bottom: 0.2rem;
+      display: flex;
+      justify-content: space-between;
+      gap: 0.4rem;
+    }
+
+    .obj-card .layer-badge {
+      font-size: 0.55rem;
+      letter-spacing: 0.05em;
+      color: var(--fg);
+      opacity: 0.7;
+      text-transform: uppercase;
+    }
+
+    .obj-card .name {
+      font-family: var(--mono);
+      font-size: 0.82rem;
+      font-weight: 500;
+      color: var(--accent);
+    }
+
+    .obj-card .role {
+      font-size: 0.75rem;
+      color: var(--fg-muted);
+      margin-top: 0.25rem;
+      line-height: 1.35;
+    }
+
+    .obj-card .role code {
+      font-family: var(--mono);
+      font-size: 0.85em;
+      color: var(--accent);
+    }
+
+    .install-split {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.65rem;
+      margin-top: 0.7rem;
+    }
+
+    .install-box {
+      padding: 0.6rem 0.8rem;
+      background: var(--bg-elevated);
+      border: 1px solid var(--border);
+      font-size: 0.78rem;
+      line-height: 1.4;
+      color: var(--fg-muted);
+    }
+
+    .install-box strong {
+      display: block;
+      font-size: 0.7rem;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--fg);
+      margin-bottom: 0.3rem;
+    }
+
+    .timeline {
+      display: grid;
+      grid-template-columns: 1fr auto 1fr;
+      gap: 0.85rem;
+      align-items: stretch;
+      margin-top: 1.4rem;
+      max-width: 44rem;
+    }
+
+    .tl-job {
+      padding: 1rem 1.1rem;
+      background: var(--bg-elevated);
+      border: 1px solid var(--border);
+    }
+
+    .tl-job.admit { border-top: 3px solid var(--admit); }
+    .tl-job.queued { border-top: 3px solid var(--queued); }
+
+    .tl-job .label {
+      font-family: var(--mono);
+      font-size: 0.75rem;
+      margin-bottom: 0.4rem;
+    }
+
+    .tl-job.admit .label { color: var(--admit); }
+    .tl-job.queued .label { color: var(--queued); }
+    .tl-job .status { font-size: 1.25rem; font-weight: 700; }
+    .tl-job p { font-size: 0.85rem; color: var(--fg-muted); margin-top: 0.35rem; line-height: 1.4; }
+
+    .tl-arrow {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      color: var(--fg-muted);
+      font-size: 0.7rem;
+      text-align: center;
+      gap: 0.25rem;
+    }
+
+    .tl-arrow span { font-size: 1.35rem; color: var(--accent); }
+
+    .paths {
+      display: grid;
+      gap: 0.5rem;
+      margin-top: 1.15rem;
+      max-width: 42rem;
+    }
+
+    .path-row {
+      display: grid;
+      grid-template-columns: 9rem 1fr;
+      gap: 0.65rem;
+      padding: 0.6rem 0.9rem;
+      background: var(--bg-elevated);
+      border: 1px solid var(--border);
+      font-size: 0.9rem;
+    }
+
+    .path-row .what { color: var(--fg-muted); font-weight: 500; }
+    .path-row code { font-family: var(--mono); font-size: 0.82rem; color: var(--accent); word-break: break-all; }
+
+    .compare {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.85rem;
+      margin-top: 1.15rem;
+      max-width: 50rem;
+    }
+
+    .compare-col {
+      padding: 0.95rem 1.1rem;
+      background: var(--bg-elevated);
+      border: 1px solid var(--border);
+    }
+
+    .compare-col h3 {
+      font-size: 0.95rem;
+      font-weight: 600;
+      margin-bottom: 0.65rem;
+      color: var(--accent);
+    }
+
+    .compare-col.runai-col { border-top: 3px solid var(--runai); }
+    .compare-col.rh-col { border-top: 3px solid var(--rh); }
+
+    .compare-col ul {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 0.4rem;
+    }
+
+    .compare-col li {
+      font-size: 0.88rem;
+      line-height: 1.35;
+      padding-left: 0.9rem;
+      position: relative;
+      color: var(--fg-muted);
+    }
+
+    .compare-col li::before {
+      content: "·";
+      position: absolute;
+      left: 0;
+      color: var(--accent);
+      font-weight: 700;
+    }
+
+    .stack-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.85rem;
+      margin-top: 1rem;
+    }
+
+    .stack {
+      background: var(--bg-elevated);
+      border: 1px solid var(--border);
+      padding: 0.85rem;
+    }
+
+    .stack h3 {
+      font-size: 0.85rem;
+      font-weight: 700;
+      margin-bottom: 0.65rem;
+      padding-bottom: 0.45rem;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .stack.runai h3 { color: #6ee7a8; }
+    .stack.openshift h3 { color: #f87171; }
+
+    .stack-layer {
+      font-size: 0.78rem;
+      line-height: 1.35;
+      padding: 0.45rem 0.55rem;
+      margin-bottom: 0.35rem;
+      background: var(--bg-panel);
+      border-left: 3px solid var(--border);
+      color: var(--fg-muted);
+    }
+
+    .stack-layer strong {
+      display: block;
+      color: var(--fg);
+      font-size: 0.72rem;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      margin-bottom: 0.15rem;
+    }
+
+    .stack.runai .stack-layer { border-left-color: var(--runai); }
+    .stack.openshift .stack-layer { border-left-color: var(--rh); }
+
+    .wiring {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 0.65rem;
+      margin-top: 1.4rem;
+      max-width: 48rem;
+    }
+
+    .wire-node {
+      flex: 1 1 130px;
+      min-width: 130px;
+      padding: 0.9rem;
+      background: var(--bg-elevated);
+      border: 1px solid var(--border);
+      text-align: center;
+    }
+
+    .wire-node .layer-tag {
+      font-size: 0.65rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--fg-muted);
+      margin-bottom: 0.35rem;
+    }
+
+    .wire-node code {
+      font-family: var(--mono);
+      font-size: 0.8rem;
+      color: var(--accent);
+      display: block;
+      word-break: break-all;
+    }
+
+    .wire-hint {
+      margin-top: 1.1rem;
+      font-size: 0.95rem;
+      color: var(--warn);
+      max-width: 42rem;
+      line-height: 1.4;
+    }
+
+    .role-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 1rem;
+      font-size: 0.85rem;
+    }
+
+    .role-table th,
+    .role-table td {
+      text-align: left;
+      padding: 0.65rem 0.75rem;
+      border: 1px solid var(--border);
+      vertical-align: top;
+      line-height: 1.35;
+    }
+
+    .role-table th {
+      background: var(--bg-panel);
+      font-size: 0.75rem;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      color: var(--accent);
+      font-weight: 600;
+    }
+
+    .role-table td { color: var(--fg-muted); background: var(--bg-elevated); }
+    .role-table td:first-child { color: var(--fg); font-weight: 600; width: 18%; }
+
+    .callout {
+      margin-top: 1rem;
+      padding: 0.9rem 1.1rem;
+      background: var(--bg-elevated);
+      border-left: 4px solid var(--accent);
+      font-size: 0.95rem;
+      line-height: 1.45;
+      color: var(--fg-muted);
+      max-width: 48rem;
+    }
+
+    .callout strong { color: var(--fg); }
+
+    .frac-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 0.65rem;
+      margin-top: 1rem;
+    }
+
+    .frac-card {
+      padding: 0.85rem 0.95rem;
+      background: var(--bg-elevated);
+      border: 1px solid var(--border);
+      border-top: 3px solid var(--accent-dim);
+    }
+
+    .frac-card h3 {
+      font-size: 0.95rem;
+      font-weight: 700;
+      margin-bottom: 0.4rem;
+    }
+
+    .frac-card p {
+      font-size: 0.8rem;
+      color: var(--fg-muted);
+      line-height: 1.4;
+    }
+
+    .qa-list {
+      list-style: none;
+      margin-top: 0.85rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+      max-width: 50rem;
+    }
+
+    .qa-list li {
+      padding: 0.75rem 0.95rem;
+      background: var(--bg-elevated);
+      border: 1px solid var(--border);
+    }
+
+    .qa-list .q {
+      font-size: 0.8rem;
+      font-weight: 600;
+      color: var(--accent);
+      margin-bottom: 0.3rem;
+    }
+
+    .qa-list .a {
+      font-size: 0.9rem;
+      color: var(--fg-muted);
+      line-height: 1.4;
+    }
+
+    .qa-list .a strong { color: var(--fg); }
+
+    .plan-boxes {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.75rem;
+      margin-top: 1rem;
+    }
+
+    .plan-box {
+      padding: 0.9rem 1rem;
+      background: var(--bg-elevated);
+      border: 1px solid var(--border);
+    }
+
+    .plan-box.recommended { border-top: 3px solid var(--admit); }
+    .plan-box.alt { border-top: 3px solid var(--queued); }
+
+    .plan-box h3 {
+      font-size: 0.85rem;
+      font-weight: 700;
+      margin-bottom: 0.45rem;
+    }
+
+    .plan-box p {
+      font-size: 0.85rem;
+      color: var(--fg-muted);
+      line-height: 1.4;
+    }
+
+    .takeaways {
+      list-style: none;
+      margin-top: 1rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+      max-width: 48rem;
+      counter-reset: take;
+    }
+
+    .takeaways li {
+      display: grid;
+      grid-template-columns: 2rem 1fr;
+      gap: 0.85rem;
+      align-items: start;
+      counter-increment: take;
+    }
+
+    .takeaways li::before {
+      content: counter(take);
+      font-family: var(--mono);
+      font-weight: 600;
+      font-size: 1rem;
+      color: var(--accent);
+      line-height: 1.4;
+    }
+
+    .takeaways li span {
+      font-size: clamp(0.95rem, 1.5vw, 1.1rem);
+      line-height: 1.4;
+    }
+
+    .tagline {
+      margin-top: 1.35rem;
+      padding-top: 1rem;
+      border-top: 1px solid var(--border);
+      font-size: 1.05rem;
+      font-weight: 600;
+      color: var(--accent);
+      max-width: 44rem;
+      line-height: 1.4;
+    }
+
+    .chrome {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      z-index: 10;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.75rem;
+      padding: 0.75rem 1.25rem;
+      background: rgba(15, 20, 25, 0.92);
+      border-top: 1px solid var(--border);
+      backdrop-filter: blur(8px);
+    }
+
+    .chrome-left,
+    .chrome-right {
+      display: flex;
+      align-items: center;
+      gap: 0.45rem;
+    }
+
+    .chrome button {
+      font-family: var(--font);
+      font-size: 0.8rem;
+      font-weight: 500;
+      color: var(--fg);
+      background: var(--bg-panel);
+      border: 1px solid var(--border);
+      padding: 0.4rem 0.75rem;
+      cursor: pointer;
+    }
+
+    .chrome button:hover:not(:disabled) {
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+
+    .chrome button:disabled { opacity: 0.35; cursor: not-allowed; }
+
+    .dots {
+      display: flex;
+      gap: 0.3rem;
+      align-items: center;
+      flex-wrap: wrap;
+      justify-content: center;
+      max-width: 40%;
+    }
+
+    .dots button {
+      width: 0.45rem;
+      height: 0.45rem;
+      padding: 0;
+      border-radius: 0;
+      background: var(--border);
+      border: none;
+    }
+
+    .dots button.active {
+      background: var(--accent);
+      width: 0.9rem;
+    }
+
+    .counter {
+      font-family: var(--mono);
+      font-size: 0.75rem;
+      color: var(--fg-muted);
+      min-width: 3.5rem;
+      text-align: center;
+    }
+
+    .hint-keys {
+      font-size: 0.7rem;
+      color: var(--fg-muted);
+      display: none;
+    }
+
+    @media (min-width: 900px) {
+      .hint-keys { display: inline; margin-left: 0.6rem; }
+    }
+
+    .notes-panel {
+      position: fixed;
+      left: 0;
+      right: 0;
+      bottom: 3.2rem;
+      z-index: 9;
+      max-height: 28vh;
+      overflow-y: auto;
+      padding: 0.9rem 1.25rem;
+      background: var(--bg-panel);
+      border-top: 1px solid var(--border);
+      font-size: 0.85rem;
+      line-height: 1.45;
+      color: var(--fg-muted);
+      display: none;
+    }
+
+    .notes-panel.visible { display: block; }
+
+    .notes-panel .notes-label {
+      font-size: 0.65rem;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--accent);
+      margin-bottom: 0.35rem;
+    }
+
+    body.notes-open .slide {
+      padding-bottom: calc(var(--slide-pad) + 3.5rem + 28vh);
+    }
+
+    @media (max-width: 800px) {
+      .obj-grid, .frac-grid, .stack-grid, .plan-boxes, .compare { grid-template-columns: 1fr; }
+      .install-split { grid-template-columns: 1fr; }
+      .timeline { grid-template-columns: 1fr; }
+      .tl-arrow { transform: rotate(90deg); }
+      .path-row { grid-template-columns: 1fr; }
+      .role-table { font-size: 0.75rem; }
+    }
+  </style>
+</head>
+<body>
+  <div class="deck" id="deck" aria-live="polite">
+
+    <!-- 1. Title -->
+    <section class="slide active" data-notes="Frame as the OpenShift-native alternative to the Run:ai / KAI stack. Sibling to karta-kueue-dra and karta-decoupled-scheduler.">
+      <p class="eyebrow">Investigation · RH AI · karta-openshift-workload-api</p>
+      <h1>Alternatives to the Run:ai / KAI stack</h1>
+      <p class="lede">How <strong>Karta</strong>, <strong>Grove</strong>, and OpenShift’s native <strong>Workload API</strong> replace a secondary scheduler binary — plus fractional GPU paths without Run:ai virtualization.</p>
+      <p class="tagline" style="border: none; padding-top: 0; margin-top: 1.5rem;">
+        Demo folder:
+        <code class="mono">examples/karta-openshift-workload-api</code>
+      </p>
+    </section>
+
+    <!-- 2. Question -->
+    <section class="slide" data-notes="Roadmap question from Openshift Workloads API work. Emphasize bypass, not 'Karta alone replaces everything'.">
+      <p class="eyebrow">Roadmap question</p>
+      <h2>Can we get away from KAI?</h2>
+      <div class="question-box">
+        Because of OpenShift / Kubernetes <strong>Workload API</strong> work, can we bypass the KAI Scheduler by combining <strong>Karta</strong>, <strong>Grove</strong>, and the native Workload API?
+      </div>
+      <p class="answer-yes">Yes.</p>
+      <p class="answer-nuance">Karta maps schema. Grove shapes cliques. Kueue admits. Workload API + kube-scheduler place. <strong>KAI is optional — not required.</strong></p>
+    </section>
+
+    <!-- 3. Callout claim -->
+    <section class="slide" data-notes="Lead with the strategic claim. Then unpack layers on following slides.">
+      <p class="eyebrow">Strategic claim</p>
+      <h2>A streamlined AI stack without KAI</h2>
+      <div class="callout">
+        Combining <strong>Karta</strong>, <strong>Grove</strong>, and OpenShift’s native <strong>Workload API</strong> creates a streamlined AI stack that eliminates the need to run a secondary scheduler binary like <strong>KAI</strong> altogether.
+      </div>
+      <ul class="bullets">
+        <li><strong>No hard code dependency</strong> on KAI — install script never pulls it.</li>
+        <li>Grove + sample Jobs pin <code>schedulerName: default-scheduler</code>.</li>
+        <li>Gang / all-or-nothing moves to <code>scheduling.k8s.io</code> Workload (+ KEP-6012).</li>
+      </ul>
+    </section>
+
+    <!-- 4. Two stacks -->
+    <section class="slide" data-notes="Same workload + translation idea. Divergence is admission/placement/compute. Left keeps KAI + Run:ai virtualization; right uses Workload API + GPU Operator/DRA.">
+      <p class="eyebrow">Architecture</p>
+      <h2>Run:ai stack vs OpenShift AI path</h2>
+      <div class="stack-grid">
+        <div class="stack runai">
+          <h3>Run:ai / NVIDIA</h3>
+          <div class="stack-layer"><strong>Workload</strong> JobSet, RayCluster, PodCliqueSet, …</div>
+          <div class="stack-layer"><strong>Translation</strong> Karta + Grove (PodGang)</div>
+          <div class="stack-layer"><strong>Admission &amp; scheduling</strong> Run:ai CP / Kueue + <em>KAI</em> (NVLink / topology)</div>
+          <div class="stack-layer"><strong>Virtualization</strong> Fractional VRAM, swap, preemption</div>
+          <div class="stack-layer"><strong>Hardware</strong> NVIDIA GPUs</div>
+        </div>
+        <div class="stack openshift">
+          <h3>Red Hat OpenShift AI</h3>
+          <div class="stack-layer"><strong>Workload</strong> Same CRDs / partner frameworks</div>
+          <div class="stack-layer"><strong>Translation</strong> Karta maps + Grove cliques</div>
+          <div class="stack-layer"><strong>Admission &amp; scheduling</strong> Kueue + <em>kube-scheduler + Workload API</em></div>
+          <div class="stack-layer"><strong>Compute</strong> GPU Operator / DRA (+ fractional workarounds)</div>
+          <div class="stack-layer"><strong>Hardware</strong> OpenShift GPU nodes</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 5. Roles -->
+    <section class="slide" data-notes="Clear separation of concern. Karta ≠ scheduler. Grove ≠ KAI. Workload API is what retires the secondary binary for gang.">
+      <p class="eyebrow">Separation of concerns</p>
+      <h2>What each piece owns</h2>
+      <table class="role-table">
+        <thead>
+          <tr><th>Piece</th><th>Role</th><th>Replaces?</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Karta</td>
+            <td>Declarative CRD → PodGroup-like map</td>
+            <td>Custom Go per CRD — <em>not</em> a scheduler</td>
+          </tr>
+          <tr>
+            <td>Grove</td>
+            <td>Multi-pod clique topology (<code>PodCliqueSet</code>)</td>
+            <td>Application shape — <em>not</em> KAI</td>
+          </tr>
+          <tr>
+            <td>Kueue</td>
+            <td>Admit / queue against ClusterQueue quota</td>
+            <td>Run:ai multi-tenant admission</td>
+          </tr>
+          <tr>
+            <td>Workload API</td>
+            <td>Native gang / group scheduling templates</td>
+            <td><strong>KAI</strong> as secondary scheduler</td>
+          </tr>
+          <tr>
+            <td>kube-scheduler</td>
+            <td>Default OpenShift placement</td>
+            <td>KAI topology engine (NVLink still optional later)</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <!-- 6. Flow -->
+    <section class="slide" data-notes="Walk top-down. Pause on 'KAI not installed'. Workload API is the placement contract consumers should target.">
+      <p class="eyebrow">Mental model</p>
+      <h2>How traffic flows (no KAI)</h2>
+      <div class="layers">
+        <div class="layer">
+          <div class="layer-num">APP</div>
+          <div class="layer-body"><strong>Your YAML</strong><span>Job · Grove PodCliqueSet · Ray / JobSet later</span></div>
+        </div>
+        <div class="layer">
+          <div class="layer-num">MAP</div>
+          <div class="layer-body"><strong>Karta</strong><span>Where pods / claims / suspend live</span></div>
+        </div>
+        <div class="layer">
+          <div class="layer-num">ADMIT</div>
+          <div class="layer-body"><strong>Kueue</strong><span>May this start under quota?</span></div>
+        </div>
+        <div class="layer">
+          <div class="layer-num">SHAPE</div>
+          <div class="layer-body"><strong>Grove</strong><span>Clique topology on default-scheduler</span></div>
+        </div>
+        <div class="layer">
+          <div class="layer-num">PLACE</div>
+          <div class="layer-body"><strong>Workload API + kube-scheduler</strong><span>Gang / which node — not KAI</span></div>
+        </div>
+      </div>
+      <p class="tagline">One-line: map · admit · shape · place — KAI stays out of the path.</p>
+    </section>
+
+    <!-- 7. Chart objects -->
+    <section class="slide" data-notes="Quick inventory of what helm install creates. Workload CR needs GenericWorkload gate; chart can disable it.">
+      <p class="eyebrow">This Helm demo</p>
+      <h2>What the chart builds</h2>
+      <div class="obj-grid">
+        <div class="obj-card layer2">
+          <div class="kind"><span>Karta</span><span class="layer-badge">Map</span></div>
+          <div class="name">openshift-ai-grove…</div>
+          <div class="role">Map Grove PCS → PodGroup hints</div>
+        </div>
+        <div class="obj-card layer2">
+          <div class="kind"><span>Karta</span><span class="layer-badge">Map</span></div>
+          <div class="name">openshift-ai-batch-job-v1</div>
+          <div class="role">Map batch/v1 Job (OpenShift batch)</div>
+        </div>
+        <div class="obj-card app">
+          <div class="kind"><span>Grove</span><span class="layer-badge">Shape</span></div>
+          <div class="name">grove-openshift-demo</div>
+          <div class="role"><code>default-scheduler</code> only</div>
+        </div>
+        <div class="obj-card layer1">
+          <div class="kind"><span>ClusterQueue</span><span class="layer-badge">Admit</span></div>
+          <div class="name">openshift-ai-cluster-queue</div>
+          <div class="role">CPU · mem · <code>nvidia.com/gpu</code></div>
+        </div>
+        <div class="obj-card layer1">
+          <div class="kind"><span>LocalQueue</span><span class="layer-badge">Admit</span></div>
+          <div class="name">openshift-ai-queue</div>
+          <div class="role">Jobs opt in via queue-name</div>
+        </div>
+        <div class="obj-card layer3">
+          <div class="kind"><span>Workload</span><span class="layer-badge">Place</span></div>
+          <div class="name">gang-training-workload</div>
+          <div class="role">Gang <code>minCount: 2</code></div>
+        </div>
+        <div class="obj-card app">
+          <div class="kind"><span>Job</span><span class="layer-badge">App</span></div>
+          <div class="name">gang-training-job</div>
+          <div class="role">Kueue + Workload annotations</div>
+        </div>
+        <div class="obj-card" style="border-top-color: var(--warn);">
+          <div class="kind"><span>Optional</span><span class="layer-badge">GPU</span></div>
+          <div class="name">time-slicing</div>
+          <div class="role">ClusterPolicy fragment + inference Pod</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 8. Workload API -->
+    <section class="slide" data-notes="Feature gates: GenericWorkload, GangScheduling, optionally WorkloadWithJob. If CRD missing, --set workloadApi.workload.enabled=false; keep gangJob.">
+      <p class="eyebrow">Placement without KAI</p>
+      <h2>OpenShift Workload API</h2>
+      <p class="lede">Native <code>scheduling.k8s.io</code> Workload holds gang <strong>PodGroup</strong> templates. Controllers create runtime PodGroups; kube-scheduler places all-or-nothing.</p>
+      <div class="paths">
+        <div class="path-row"><span class="what">API</span><code>scheduling.k8s.io Workload</code></div>
+        <div class="path-row"><span class="what">Policy</span><code>podGroupTemplates[].schedulingPolicy.gang.minCount</code></div>
+        <div class="path-row"><span class="what">Gates</span><code>GenericWorkload</code> · <code>GangScheduling</code></div>
+        <div class="path-row"><span class="what">Align</span><code>KEP-6012 CompositePodGroup</code> / WG WAS</div>
+      </div>
+      <ul class="bullets">
+        <li>Check: <code>oc get crd workloads.scheduling.k8s.io</code></li>
+        <li>Missing CRD → <code>--set workloadApi.workload.enabled=false</code>; gang Job + Kueue still run.</li>
+      </ul>
+    </section>
+
+    <!-- 9. Install -->
+    <section class="slide" data-notes="Stress: operators script installs Karta + Grove + Kueue only. Never KAI. Grove values strip kai/volcano profiles.">
+      <p class="eyebrow">Hands-on</p>
+      <h2>Install path (no KAI)</h2>
+      <div class="install-split">
+        <div class="install-box">
+          <strong>1. Operators</strong>
+          <code class="mono">./scripts/install-operators.sh</code><br/>
+          Karta · Grove (default-scheduler) · Kueue<br/>
+          <em>Does not install KAI</em>
+        </div>
+        <div class="install-box">
+          <strong>2. Demo chart</strong>
+          <code class="mono">helm upgrade --install demo . -n demo --create-namespace</code>
+        </div>
+      </div>
+      <ul class="bullets">
+        <li>Verify: <code>oc get karta</code> · <code>podcliqueset</code> · <code>workloads.scheduling.k8s.io</code></li>
+        <li>Confirm absence: <code>oc get pods -A | grep -i kai</code> → empty</li>
+      </ul>
+    </section>
+
+    <!-- 10. Fractional GPUs -->
+    <section class="slide" data-notes="Honest gap: Run:ai still leads on dynamic VRAM + swap. Three OpenShift paths close most sharing needs. Details in fractional-gpus.md.">
+      <p class="eyebrow">Capability gap</p>
+      <h2>Fractional GPUs without Run:ai</h2>
+      <p class="lede">Run:ai’s strength is dynamic fractioning + VRAM swap. On OpenShift, three native-ish paths:</p>
+      <div class="frac-grid">
+        <div class="frac-card">
+          <h3>1. Time-slicing</h3>
+          <p>GPU Operator <code>replicas: 4</code>. Pods request <code>nvidia.com/gpu: 1</code> = one slice. No hard VRAM isolation — noisy neighbor risk.</p>
+        </div>
+        <div class="frac-card">
+          <h3>2. MIG</h3>
+          <p>Hardware partitions on A100/H100. Strict isolation closer to Run:ai memory boundaries; profile resets required.</p>
+        </div>
+        <div class="frac-card">
+          <h3>3. Dynamic slicing</h3>
+          <p>Red Hat Dynamic Accelerator Slicer: on-demand slices via scheduling gates — less idle silicon than static replicas.</p>
+        </div>
+      </div>
+      <ul class="bullets">
+        <li>Docs + samples: <code>fractional-gpus.md</code> · opt-in Helm flags for time-slicing.</li>
+      </ul>
+    </section>
+
+    <!-- 11. Time-slice detail -->
+    <section class="slide" data-notes="Most common ask. Emphasize memory OOM caveat vs Run:ai.">
+      <p class="eyebrow">Most common path</p>
+      <h2>Time-slicing in practice</h2>
+      <div class="compare">
+        <div class="compare-col rh-col">
+          <h3>ClusterPolicy idea</h3>
+          <ul>
+            <li>GPU Operator sharing config</li>
+            <li><code>replicas: 4</code> → 4 logical GPUs per card</li>
+            <li>Scheduler sees 4 allocatable units</li>
+          </ul>
+        </div>
+        <div class="compare-col">
+          <h3>Workload request</h3>
+          <ul>
+            <li><code>nvidia.com/gpu: "1"</code> = ~25% time share</li>
+            <li>Ideal for lightweight inference</li>
+            <li><strong>No</strong> hard VRAM caps by default</li>
+          </ul>
+        </div>
+      </div>
+      <p class="wire-hint">Memory leak in one pod can OOM neighbors on the same physical GPU — unlike Run:ai’s virtual memory spaces.</p>
+    </section>
+
+    <!-- 12. Roadmap -->
+    <section class="slide" data-notes="Align with kueue-dra presentation recommendations. Keep translation pattern; prefer upstream CompositePodGroup.">
+      <p class="eyebrow">RH AI roadmap</p>
+      <h2>What to standardize on</h2>
+      <div class="plan-boxes">
+        <div class="plan-box recommended">
+          <h3>Recommended</h3>
+          <p><strong>KEP-6012 CompositePodGroup</strong> + Kueue + DRA / WAS. Retarget gang consumers to Workload API — not KAI PodGroups.</p>
+        </div>
+        <div class="plan-box alt">
+          <h3>Inspired by Karta</h3>
+          <p>Keep the <strong>JQ-style map</strong> pattern. Prefer a Kueue Workload Mapper over adopting Run:ai Karta as a hard binary dependency.</p>
+        </div>
+      </div>
+      <ul class="bullets">
+        <li>Sibling demos: <code>karta-decoupled-scheduler</code> · <code>karta-grove-kueue</code> · <code>karta-kueue-dra</code></li>
+      </ul>
+    </section>
+
+    <!-- 13. Takeaways -->
+    <section class="slide" data-notes="Close. Offer to deep-dive fractional GPU SKU config or Workload API feature-gate enablement next.">
+      <p class="eyebrow">Takeaways</p>
+      <h2>What to remember</h2>
+      <ol class="takeaways">
+        <li><span><strong>Bypassing KAI is viable</strong> — Karta + Grove + Workload API + Kueue cover schema, topology, gang placement, and admission.</span></li>
+        <li><span><strong>No hard KAI dependency</strong> — this demo installs none; pods use <code>default-scheduler</code>.</span></li>
+        <li><span><strong>Fractional GPU gap</strong> — time-slicing / MIG / Dynamic Accelerator Slicer; not a full Run:ai VRAM↔RAM swap clone.</span></li>
+        <li><span>Keep the <strong>translation pattern</strong>; align long-term with <strong>KEP-6012</strong> + Kueue.</span></li>
+      </ol>
+      <p class="tagline">Map · admit · shape · place — without a secondary scheduler binary.</p>
+    </section>
+  </div>
+
+  <div class="notes-panel" id="notesPanel" aria-hidden="true">
+    <div class="notes-label">Speaker notes</div>
+    <div id="notesText"></div>
+  </div>
+
+  <nav class="chrome" aria-label="Presentation controls">
+    <div class="chrome-left">
+      <button type="button" id="btnPrev" aria-label="Previous slide">← Prev</button>
+      <button type="button" id="btnNext" aria-label="Next slide">Next →</button>
+      <span class="hint-keys">← → · Space · Home/End · ? notes</span>
+    </div>
+    <div class="dots" id="dots" role="tablist" aria-label="Slides"></div>
+    <div class="chrome-right">
+      <button type="button" id="btnNotes" aria-pressed="false" title="Toggle speaker notes (?)">Notes</button>
+      <span class="counter" id="counter" aria-live="polite">1 / 13</span>
+    </div>
+  </nav>
+
+  <script>
+    (function () {
+      const slides = Array.from(document.querySelectorAll(".slide"));
+      const total = slides.length;
+      const counter = document.getElementById("counter");
+      const dotsEl = document.getElementById("dots");
+      const btnPrev = document.getElementById("btnPrev");
+      const btnNext = document.getElementById("btnNext");
+      const btnNotes = document.getElementById("btnNotes");
+      const notesPanel = document.getElementById("notesPanel");
+      const notesText = document.getElementById("notesText");
+      let index = 0;
+      let notesOpen = false;
+
+      slides.forEach((_, i) => {
+        const b = document.createElement("button");
+        b.type = "button";
+        b.setAttribute("role", "tab");
+        b.setAttribute("aria-label", "Go to slide " + (i + 1));
+        b.addEventListener("click", () => go(i));
+        dotsEl.appendChild(b);
+      });
+
+      const dots = Array.from(dotsEl.querySelectorAll("button"));
+
+      function go(n) {
+        if (n < 0 || n >= total) return;
+        slides[index].classList.remove("active");
+        index = n;
+        slides.forEach((s, i) => s.classList.toggle("active", i === index));
+        counter.textContent = (index + 1) + " / " + total;
+        dots.forEach((d, i) => d.classList.toggle("active", i === index));
+        btnPrev.disabled = index === 0;
+        btnNext.disabled = index === total - 1;
+        notesText.textContent = slides[index].dataset.notes || "";
+        history.replaceState(null, "", "#" + (index + 1));
+      }
+
+      function toggleNotes() {
+        notesOpen = !notesOpen;
+        notesPanel.classList.toggle("visible", notesOpen);
+        notesPanel.setAttribute("aria-hidden", notesOpen ? "false" : "true");
+        btnNotes.setAttribute("aria-pressed", notesOpen ? "true" : "false");
+        document.body.classList.toggle("notes-open", notesOpen);
+      }
+
+      btnPrev.addEventListener("click", () => go(index - 1));
+      btnNext.addEventListener("click", () => go(index + 1));
+      btnNotes.addEventListener("click", toggleNotes);
+
+      document.addEventListener("keydown", (e) => {
+        if (e.target.matches("input, textarea")) return;
+        switch (e.key) {
+          case "ArrowRight":
+          case " ":
+          case "PageDown":
+            e.preventDefault();
+            go(index + 1);
+            break;
+          case "ArrowLeft":
+          case "PageUp":
+            e.preventDefault();
+            go(index - 1);
+            break;
+          case "Home":
+            e.preventDefault();
+            go(0);
+            break;
+          case "End":
+            e.preventDefault();
+            go(total - 1);
+            break;
+          case "?":
+          case "n":
+          case "N":
+            e.preventDefault();
+            toggleNotes();
+            break;
+        }
+      });
+
+      const hash = parseInt(location.hash.replace("#", ""), 10);
+      go(hash >= 1 && hash <= total ? hash - 1 : 0);
+    })();
+  </script>
+</body>
+</html>

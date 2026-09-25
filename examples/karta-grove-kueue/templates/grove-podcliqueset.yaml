@@ -1,0 +1,30 @@
+{{- if .Values.grove.enabled }}
+# Minimal Grove workload described by the grove-kueue-podcliqueset-v1alpha1 Karta.
+# Grove operator creates PodCliques / pods; default-scheduler places them.
+apiVersion: grove.io/v1alpha1
+kind: PodCliqueSet
+metadata:
+  name: {{ .Values.grove.podCliqueSet.name }}
+  labels:
+    {{- include "karta-grove-kueue.labels" . | nindent 4 }}
+spec:
+  # How many full replicas of the clique template to run.
+  replicas: {{ .Values.grove.podCliqueSet.replicas }}
+  template:
+    cliques:
+      - name: {{ .Values.grove.podCliqueSet.cliqueName }}
+        spec:
+          roleName: {{ .Values.grove.podCliqueSet.cliqueName }}
+          # Pods per clique within each PCS replica.
+          replicas: {{ .Values.grove.podCliqueSet.cliqueReplicas }}
+          podSpec:
+            # Explicit: OpenShift / kube default — even if Grove came from Dynamo/KAI stack.
+            schedulerName: default-scheduler
+            containers:
+              - name: {{ .Values.grove.podCliqueSet.cliqueName }}
+                image: {{ .Values.grove.podCliqueSet.image | quote }}
+                command:
+                  {{- toYaml .Values.grove.podCliqueSet.command | nindent 18 }}
+                resources:
+                  {{- toYaml .Values.grove.podCliqueSet.resources | nindent 18 }}
+{{- end }}

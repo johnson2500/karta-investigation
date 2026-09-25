@@ -1,0 +1,33 @@
+Karta + Grove + Kueue example ({{ .Release.Name }})
+
+What was installed in namespace {{ .Release.Namespace }}:
+{{- if .Values.karta.enabled }}
+{{- if .Values.karta.grovePodCliqueSet.enabled }}
+  - Karta map: {{ .Values.karta.grovePodCliqueSet.name }} (Grove PodCliqueSet)
+{{- end }}
+{{- if .Values.karta.batchJob.enabled }}
+  - Karta map: {{ .Values.karta.batchJob.name }} (batch/v1 Job, incl. OpenShift batch)
+{{- end }}
+{{- end }}
+{{- if .Values.grove.enabled }}
+  - Grove PodCliqueSet: {{ .Values.grove.podCliqueSet.name }}
+{{- end }}
+{{- if .Values.kueue.enabled }}
+  - Kueue ResourceFlavor: {{ .Values.kueue.resourceFlavor.name }}
+  - Kueue ClusterQueue: {{ .Values.kueue.clusterQueue.name }}
+  - Kueue LocalQueue: {{ .Values.kueue.localQueue.name }}
+{{- range .Values.kueue.sampleJobs }}
+{{- if .enabled }}
+  - Sample Job: {{ .name }}
+{{- end }}
+{{- end }}
+{{- end }}
+
+Verify:
+  kubectl get karta
+  kubectl get podcliqueset -n {{ .Release.Namespace }}
+  kubectl get pods -n {{ .Release.Namespace }}
+  kubectl get clusterqueue {{ .Values.kueue.clusterQueue.name }}
+  kubectl get localqueue -n {{ .Release.Namespace }}
+  kubectl get workloads -n {{ .Release.Namespace }}
+  kubectl get jobs -n {{ .Release.Namespace }}

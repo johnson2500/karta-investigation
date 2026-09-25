@@ -1,0 +1,11 @@
+{{- if .Values.kueue.enabled }}
+# Namespace LocalQueue — RayJobs select it via kueue.x-k8s.io/queue-name.
+apiVersion: kueue.x-k8s.io/v1beta1
+kind: LocalQueue
+metadata:
+  name: {{ .Values.kueue.localQueue.name }}
+  labels:
+    {{- include "karta-kueue-admission.labels" . | nindent 4 }}
+spec:
+  clusterQueue: {{ .Values.kueue.clusterQueue.name }}
+{{- end }}

@@ -1,0 +1,61 @@
+# Image built from examples/karta-demo-hub/Containerfile (context = repo root).
+#   podman build -f examples/karta-demo-hub/Containerfile -t karta-demo-hub:0.1.0 .
+image:
+  repository: karta-demo-hub
+  tag: "0.1.0"
+  # Always — same tag often gets rebuilt (arm64 vs amd64); Avoids stale node cache.
+  pullPolicy: Always
+
+replicaCount: 1
+
+nameOverride: ""
+fullnameOverride: ""
+
+service:
+  port: 8080
+
+route:
+  enabled: true
+  # Empty host → OpenShift assigns <release>-<ns>.apps.<cluster>
+  host: ""
+  tls:
+    enabled: true
+    termination: edge
+    insecureEdgeTerminationPolicy: Redirect
+
+# Which demos appear in the gallery (ids match catalog.json).
+demos:
+  enabled:
+    - karta-grove-kueue
+    - karta-rayjob-compound-crd
+    - karta-decoupled-scheduler
+    - karta-kueue-admission
+    - karta-kueue-dra
+    - karta-openshift-workload-api
+
+# Read-only cluster status for operator / namespace badges.
+rbac:
+  create: true
+
+resources:
+  requests:
+    cpu: 50m
+    memory: 128Mi
+  limits:
+    cpu: 500m
+    memory: 512Mi
+
+# OpenShift restricted-v2 friendly (no fixed UID).
+securityContext:
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop:
+      - ALL
+  runAsNonRoot: true
+  seccompProfile:
+    type: RuntimeDefault
+
+podSecurityContext:
+  runAsNonRoot: true
+  seccompProfile:
+    type: RuntimeDefault

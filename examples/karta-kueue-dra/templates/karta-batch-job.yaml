@@ -1,0 +1,101 @@
+{{- if and .Values.karta.enabled .Values.karta.batchJob.enabled }}
+# =============================================================================
+# Karta map for batch/v1 Job — Layer 2 (translation) in the Kueue + DRA demo
+# =============================================================================
+# Stakeholder question: if Kueue admits and DRA allocates devices, do we still
+# need Karta? YES — as a translation pattern. This CR declares where pods, DRA
+# claims, scale, suspend, and status live — without hard-coding Job schema in Go.
+#
+# Layers:
+#   1. Kueue  — admit vs queue (quota)
+#   2. Karta  — THIS FILE — portable map (including DRA claim paths)
+#   3. DRA + kube-scheduler — device claim + placement
+#
+# Not a scheduler. Not a queue. Coexists with Kueue; does not replace Grove or KAI.
+# Adapted from examples/karta-grove-kueue/templates/karta-batch-job.yaml
+# Field-by-field prose: ../karta-batch-job.md
+# =============================================================================
+apiVersion: run.ai/v1alpha1
+kind: Karta
+metadata:
+  name: {{ .Values.karta.batchJob.name }}
+  labels:
+    {{- include "karta-kueue-dra.labels" . | nindent 4 }}
+spec:
+  structureDefinition:
+    rootComponent:
+      name: job
+      kind:
+        group: batch
+        version: v1
+        kind: Job
+      # Full pod template (including resourceClaims) lives on the Job.
+      specDefinition:
+        podTemplateSpecPath: .spec.template
+        # Explicit DRA paths so platforms discover device claims without
+        # hard-coding Job schema (mirrors Grove resourceClaimsPath pattern).
+        # This is the key "Karta still useful with DRA" teaching point.
+        fragmentedPodSpecDefinition:
+          resourceClaimsPath: .spec.template.spec.resourceClaims
+          containersPath: .spec.template.spec.containers
+          schedulerNamePath: .spec.template.spec.schedulerName
+          labelsPath: .spec.template.metadata.labels
+          annotationsPath: .spec.template.metadata.annotations
+      scaleDefinition:
+        # // 1 = default parallelism when unset (single-pod Job).
+        replicasPath: .spec.parallelism // 1
+      statusDefinition:
+        conditionsDefinition:
+          path: .status.conditions
+          typeFieldName: type
+          statusFieldName: status
+          messageFieldName: message
+          reasonFieldName: reason
+        # Map Job status/conditions → portable lifecycle phases platforms understand.
+        statusMappings:
+          initializing:
+            - byExpression:
+                expression: (.status.active // 0) > 0 and (.status.ready // 0) == 0
+                expectedResult: "true"
+          running:
+            - byExpression:
+                expression: (.status.active // 0) > 0 and (.status.ready // 0) > 0
+                expectedResult: "true"
+          completed:
+            - byConditions:
+                - type: Complete
+                  status: "True"
+            - byConditions:
+                - type: SuccessCriteriaMet
+                  status: "True"
+          failed:
+            - byConditions:
+                - type: Failed
+                  status: "True"
+            - byConditions:
+                - type: FailureTarget
+                  status: "True"
+          # Aligns with Kueue holding Jobs via spec.suspend until quota is free.
+          suspended:
+            - byConditions:
+                - type: Suspended
+                  status: "True"
+      # How controllers toggle Job admission hold (same field Kueue uses).
+      suspendDefinition:
+        suspendActions:
+          - path: .spec.suspend
+            value: "true"
+        resumeActions:
+          - path: .spec.suspend
+            value: "false"
+  # Gang hint for co-scheduling views — not DRA bind and not Kueue quota.
+  optimizationInstructions:
+    gangScheduling:
+      podGroups:
+        - name: job
+          members:
+            - componentName: job
+              # Group pods belonging to this Job instance for co-scheduling views.
+              groupByKeyPaths:
+                - .metadata.labels["batch.kubernetes.io/job-name"]
+{{- end }}

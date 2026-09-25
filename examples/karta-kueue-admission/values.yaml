@@ -1,0 +1,54 @@
+# Sample CRs only. Install operators first via scripts/install-operators.sh.
+# Distinct from examples/karta-grove-kueue — focuses on RayJob + GPU quota queuing.
+
+nameOverride: ""
+fullnameOverride: ""
+
+karta:
+  enabled: true
+  rayJob:
+    enabled: true
+    # Chart-prefixed: cluster-scoped Karta CRs cannot be shared across Helm releases.
+    name: admit-ray-io-rayjob-v1
+
+kueue:
+  enabled: true
+  resourceFlavor:
+    name: gpu-flavor
+    # Empty nodeLabels = any node; set e.g. nvidia.com/gpu.product for real GPU pools.
+    nodeLabels: {}
+  clusterQueue:
+    name: gpu-cluster-queue
+    # Strict GPU limit: only ONE "GPU unit" of quota (demo uses nvidia.com/gpu: "1").
+    # Two RayJobs each requesting 1 GPU → second stays Pending until first finishes.
+    nominalQuota:
+      cpu: "8"
+      memory: 16Gi
+      "nvidia.com/gpu": "1"
+  localQueue:
+    name: gpu-local-queue
+
+# Two Karta-managed RayJobs sharing the LocalQueue. Together they exceed GPU quota.
+rayJobs:
+  - name: rayjob-gpu-admit
+    enabled: true
+    # First job: fits the ClusterQueue (1 GPU) → Admitted → Placement.
+    gpus: "1"
+    cpu: "500m"
+    memory: 1Gi
+    image: rayproject/ray:2.46.0-py312
+    entrypoint: python -c "import time; print('admit-ok'); time.sleep(120)"
+    shutdownAfterJobFinishes: true
+    ttlSecondsAfterFinished: 300
+    openshiftRestricted: true
+  - name: rayjob-gpu-queued
+    enabled: true
+    # Second job: also wants 1 GPU while quota is 1 → Workload stays Pending (queued).
+    gpus: "1"
+    cpu: "500m"
+    memory: 1Gi
+    image: rayproject/ray:2.46.0-py312
+    entrypoint: python -c "import time; print('queued-then-run'); time.sleep(30)"
+    shutdownAfterJobFinishes: true
+    ttlSecondsAfterFinished: 300
+    openshiftRestricted: true

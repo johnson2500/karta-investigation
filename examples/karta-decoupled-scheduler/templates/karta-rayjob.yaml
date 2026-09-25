@@ -1,0 +1,101 @@
+{{- if and .Values.karta.enabled .Values.karta.rayJob.enabled }}
+# =============================================================================
+# Optional RayJob Karta — same map shape as karta-rayjob-compound-crd
+# =============================================================================
+# Enable when demoing Ray without Training Operator / without KAI.
+# Still proves: Karta has no hard scheduler dependency; pods use default-scheduler
+# (or whatever schedulerName you set on the sample RayJob).
+# =============================================================================
+apiVersion: run.ai/v1alpha1
+kind: Karta
+metadata:
+  name: {{ .Values.karta.rayJob.name }}
+  labels:
+    {{- include "karta-decoupled-scheduler.labels" . | nindent 4 }}
+spec:
+  structureDefinition:
+    rootComponent:
+      name: rayjob
+      kind:
+        group: ray.io
+        version: v1
+        kind: RayJob
+      statusDefinition:
+        phaseDefinition:
+          path: .status.jobStatus
+        conditionsDefinition:
+          path: .status.conditions
+          typeFieldName: type
+          statusFieldName: status
+          messageFieldName: message
+          reasonFieldName: reason
+        # Portable phases from KubeRay phase + conditions.
+        statusMappings:
+          initializing:
+            - byPhase: PENDING
+          running:
+            - byPhase: RUNNING
+            - byConditions:
+                - type: Running
+                  status: "True"
+          completed:
+            - byPhase: SUCCEEDED
+            - byConditions:
+                - type: Complete
+                  status: "True"
+          failed:
+            - byPhase: FAILED
+            - byConditions:
+                - type: Failed
+                  status: "True"
+      suspendDefinition:
+        suspendActions:
+          - path: .spec.suspend
+            value: "true"
+        resumeActions:
+          - path: .spec.suspend
+            value: "false"
+    # Compound CRD: head + worker templates under rayClusterSpec.
+    childComponents:
+      - name: head
+        kind:
+          group: ""
+          version: v1
+          kind: Pod
+        ownerRef: rayjob
+        specDefinition:
+          podTemplateSpecPath: .spec.rayClusterSpec.headGroupSpec.template
+        scaleDefinition:
+          replicasPath: "1"
+        podSelector:
+          componentTypeSelector:
+            keyPath: .metadata.labels["ray.io/node-type"]
+            value: head
+      - name: worker
+        kind:
+          group: ""
+          version: v1
+          kind: Pod
+        ownerRef: rayjob
+        specDefinition:
+          podTemplateSpecPath: .spec.rayClusterSpec.workerGroupSpecs[].template
+        scaleDefinition:
+          replicasPath: .spec.rayClusterSpec.workerGroupSpecs[].replicas // 1
+        instanceIdPath: .spec.rayClusterSpec.workerGroupSpecs[].groupName
+        podSelector:
+          componentTypeSelector:
+            keyPath: .metadata.labels["ray.io/node-type"]
+            value: worker
+  # Gang: head+workers sharing ray.io/cluster — no KAI required to declare this hint.
+  optimizationInstructions:
+    gangScheduling:
+      podGroups:
+        - name: job
+          members:
+            - componentName: head
+              groupByKeyPaths:
+                - .metadata.labels["ray.io/cluster"]
+            - componentName: worker
+              groupByKeyPaths:
+                - .metadata.labels["ray.io/cluster"]
+{{- end }}

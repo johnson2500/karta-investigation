@@ -1,0 +1,78 @@
+# Chart defaults for the Karta → Kueue → DRA showcase.
+# Role: tune Layer 1 (Kueue quota), Layer 2 (Karta map toggle), Layer 3 (DRA claims),
+#       and the dual sample Jobs that prove admit-vs-queue against a strict GPU quota.
+# Stakeholder question: can Karta sit above Kueue admission while DRA (not KAI) allocates GPUs?
+# Prerequisite: install operators first via scripts/install-operators.sh; this chart is CRs only.
+# Complementary to Grove (clique topologies) and KAI (advanced GPU topology) — does not replace them.
+
+nameOverride: ""
+fullnameOverride: ""
+
+karta:
+  enabled: true
+  batchJob:
+    enabled: true
+    # Chart-prefixed: cluster-scoped Karta CRs cannot be shared across Helm releases.
+    name: dra-batch-job-v1
+
+kueue:
+  enabled: true
+  resourceFlavor:
+    name: dra-gpu-flavor
+    # Empty = any node. Set labels that match DRA-capable GPU nodes when pinning the pool.
+    nodeLabels: {}
+  clusterQueue:
+    name: dra-cluster-queue
+    # Logical DRA quota name — must match deviceClassMappings.name in
+    # scripts/kueue-values.yaml (Kueue ResourceClaimTemplate accounting path).
+    # Strict "1" so a second Job stays Pending while the first holds quota.
+    nominalQuota:
+      cpu: "4"
+      memory: 8Gi
+      "example.com/gpu": "1"
+  localQueue:
+    # Namespace entrypoint; sample Jobs select it via kueue.x-k8s.io/queue-name.
+    name: dra-local-queue
+
+dra:
+  enabled: true
+  # Cluster-scoped DeviceClass. On a real cluster a DRA driver usually owns this;
+  # this chart ships an illustrative shape so helm template / dry-run works.
+  # Set createDeviceClass: false if your driver already created the class.
+  createDeviceClass: true
+  deviceClass:
+    name: gpu.example.com
+    # Optional CEL selector — illustrative; real drivers publish ResourceSlices.
+    driver: gpu.example.com
+  resourceClaimTemplate:
+    name: single-gpu
+    # Claim name referenced from the Job pod template (resourceClaims + claims).
+    requestName: gpu
+    count: 1
+
+# Two suspended Jobs on the same LocalQueue. Each claims 1 DRA GPU unit;
+# ClusterQueue quota is 1 → second Workload stays Pending (queued) until the first finishes.
+sampleJobs:
+  - name: dra-job-admit
+    enabled: true
+    # Fits quota → Admitted → pods reference ResourceClaimTemplate → DRA allocates.
+    cpu: "500m"
+    memory: 512Mi
+    image: registry.access.redhat.com/ubi9/ubi-minimal:latest
+    command:
+      - /bin/sh
+      - -c
+      - echo "dra-admit-ok"; sleep 120
+    # OpenShift restricted-SCC-friendly pod/container securityContext.
+    openshiftRestricted: true
+  - name: dra-job-queued
+    enabled: true
+    # Also wants 1 DRA GPU while quota is 1 → Workload Pending until first finishes.
+    cpu: "500m"
+    memory: 512Mi
+    image: registry.access.redhat.com/ubi9/ubi-minimal:latest
+    command:
+      - /bin/sh
+      - -c
+      - echo "dra-queued-then-run"; sleep 30
+    openshiftRestricted: true

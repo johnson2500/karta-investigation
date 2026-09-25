@@ -1,0 +1,16 @@
+{{- if .Values.kueue.enabled }}
+# Kueue LocalQueue — namespace-scoped entrypoint into ClusterQueue admission.
+# Role: Jobs select this queue via label kueue.x-k8s.io/queue-name; this object
+#       forwards them to the cluster-scoped ClusterQueue that holds DRA GPU quota.
+# Stakeholder question: how do app owners opt into Kueue without knowing ClusterQueue details?
+# Demo Jobs in sample-job.yaml both point here so they compete for the same quota=1.
+apiVersion: kueue.x-k8s.io/v1beta1
+kind: LocalQueue
+metadata:
+  name: {{ .Values.kueue.localQueue.name }}
+  labels:
+    {{- include "karta-kueue-dra.labels" . | nindent 4 }}
+spec:
+  # Cluster-scoped quota / flavor pool (see kueue-clusterqueue.yaml).
+  clusterQueue: {{ .Values.kueue.clusterQueue.name }}
+{{- end }}

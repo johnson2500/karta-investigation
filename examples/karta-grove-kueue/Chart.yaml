@@ -1,0 +1,6 @@
+apiVersion: v2
+name: karta-grove-kueue
+description: Minimal example of Karta, Grove, and Kueue co-deployed on one cluster
+type: application
+version: 0.1.0
+appVersion: "0.1.0"

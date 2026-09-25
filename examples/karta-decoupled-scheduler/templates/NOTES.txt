@@ -1,0 +1,23 @@
+Karta decoupled-scheduler showcase ({{ .Release.Name }})
+
+Installed in namespace {{ .Release.Namespace }} (no KAI required):
+{{- if and .Values.karta.enabled .Values.karta.pytorchJob.enabled }}
+  - Karta map: {{ .Values.karta.pytorchJob.name }}
+{{- end }}
+{{- if and .Values.karta.enabled .Values.karta.rayJob.enabled }}
+  - Karta map: {{ .Values.karta.rayJob.name }}
+{{- end }}
+{{- if .Values.pytorchJob.enabled }}
+  - Sample PyTorchJob: {{ .Values.pytorchJob.name }}
+{{- end }}
+{{- if .Values.rayJob.enabled }}
+  - Sample RayJob: {{ .Values.rayJob.name }}
+{{- end }}
+
+Prove default-scheduler binds pods:
+  oc get pods -n {{ .Release.Namespace }} -o wide
+  oc get pods -n {{ .Release.Namespace }} -o jsonpath='{range .items[*]}{.metadata.name}{"\t"}{.spec.schedulerName}{"\n"}{end}'
+
+Sample pods use a lightweight image/command (scheduler demo, not training).
+If pods are OOMKilled after changing image/memory, delete + recreate the PyTorchJob
+(Training Operator may not refresh the pod template from a helm patch alone).

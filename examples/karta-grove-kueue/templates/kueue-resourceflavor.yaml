@@ -1,0 +1,9 @@
+{{- if .Values.kueue.enabled }}
+# Empty flavor = any node. Bind workloads to node labels here if you need GPUs, etc.
+apiVersion: kueue.x-k8s.io/v1beta1
+kind: ResourceFlavor
+metadata:
+  name: {{ .Values.kueue.resourceFlavor.name }}
+  labels:
+    {{- include "karta-grove-kueue.labels" . | nindent 4 }}
+{{- end }}

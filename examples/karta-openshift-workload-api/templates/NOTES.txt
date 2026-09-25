@@ -1,0 +1,39 @@
+OpenShift AI stack alternative ({{ .Release.Name }})
+Karta + Grove + Kueue + Workload API — no KAI
+
+Installed in namespace {{ .Release.Namespace }}:
+{{- if .Values.karta.enabled }}
+{{- if .Values.karta.grovePodCliqueSet.enabled }}
+  - Karta map: {{ .Values.karta.grovePodCliqueSet.name }} (Grove PodCliqueSet)
+{{- end }}
+{{- if .Values.karta.batchJob.enabled }}
+  - Karta map: {{ .Values.karta.batchJob.name }} (batch/v1 Job)
+{{- end }}
+{{- end }}
+{{- if .Values.grove.enabled }}
+  - Grove PodCliqueSet: {{ .Values.grove.podCliqueSet.name }} (default-scheduler)
+{{- end }}
+{{- if .Values.kueue.enabled }}
+  - Kueue ClusterQueue: {{ .Values.kueue.clusterQueue.name }}
+  - Kueue LocalQueue: {{ .Values.kueue.localQueue.name }}
+{{- end }}
+{{- if and .Values.workloadApi.enabled .Values.workloadApi.workload.enabled }}
+  - Workload API: {{ .Values.workloadApi.workload.name }} (gang minCount={{ .Values.workloadApi.workload.minCount }})
+{{- end }}
+{{- if and .Values.workloadApi.enabled .Values.workloadApi.gangJob.enabled }}
+  - Gang Job: {{ .Values.workloadApi.gangJob.name }} (Kueue LocalQueue {{ .Values.kueue.localQueue.name }})
+{{- end }}
+
+Verify (no KAI expected):
+  oc get karta
+  oc get podcliqueset -n {{ .Release.Namespace }}
+  oc get pods -n {{ .Release.Namespace }} -o wide
+  oc get clusterqueue {{ .Values.kueue.clusterQueue.name }}
+  oc get localqueue -n {{ .Release.Namespace }}
+  oc get workloads.kueue.x-k8s.io -n {{ .Release.Namespace }}
+  oc get jobs -n {{ .Release.Namespace }}
+  # Native scheduling Workload (requires GenericWorkload feature gate):
+  oc get workloads.scheduling.k8s.io -n {{ .Release.Namespace }} 2>/dev/null || echo "Workload API CRD not present — see README"
+
+Fractional GPUs (docs): fractional-gpus.md
+  helm upgrade ... --set fractionalGpu.timeSlicing.enabled=true

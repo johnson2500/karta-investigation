@@ -1,0 +1,128 @@
+{{- if and .Values.karta.enabled .Values.karta.grovePodCliqueSet.enabled }}
+# =============================================================================
+# Karta map for Grove PodCliqueSet (grove.io/v1alpha1)
+# =============================================================================
+# What this CR is: schema translation for Grove's multi-pod clique topology.
+# Platforms use these paths instead of hard-coding Grove CRD knowledge in Go.
+#
+# Grove still owns lifecycle (creates PodClique / PodCliqueScalingGroup / pods).
+# Karta only describes: where status lives, where pod fields nest, how to gang-group.
+#
+# This is NOT KAI and NOT Kueue — pure map. In this demo Grove runs on default-scheduler.
+#
+# Adapted from dsx-ai-factory/karta docs/catalog/grove-io-podcliqueset-v1alpha1.yaml
+# =============================================================================
+apiVersion: run.ai/v1alpha1
+kind: Karta
+metadata:
+  name: {{ .Values.karta.grovePodCliqueSet.name }}
+  labels:
+    {{- include "karta-grove-kueue.labels" . | nindent 4 }}
+spec:
+  structureDefinition:
+    # rootComponent: the top-level kind users submit (PodCliqueSet).
+    rootComponent:
+      name: podcliqueset
+      kind:
+        group: grove.io
+        version: v1alpha1
+        kind: PodCliqueSet
+      statusDefinition:
+        conditionsDefinition:
+          path: .status.conditions
+          typeFieldName: type
+          statusFieldName: status
+          messageFieldName: message
+          reasonFieldName: reason
+        # Normalize Grove replica/condition status into portable lifecycle phases.
+        statusMappings:
+          initializing:
+            - byExpression:
+                expression: (.spec.replicas // 0) > 0 and (.status.availableReplicas // 0) < (.spec.replicas // 0)
+                expectedResult: "true"
+          running:
+            - byExpression:
+                expression: (.status.availableReplicas // 0) >= (.spec.replicas // 0)
+                expectedResult: "true"
+          failed:
+            - byConditions:
+                - type: TopologyLevelsUnavailable
+                  status: "True"
+    # childComponents: kinds Grove creates under a PodCliqueSet.
+    # Each child has JQ paths into fragmented pod fields (scheduler, claims, affinity…).
+    childComponents:
+      - name: clique
+        kind:
+          group: grove.io
+          version: v1alpha1
+          kind: PodClique
+        ownerRef: podcliqueset
+        # fragmentedPodSpecDefinition: Grove nests pod fields under cliques[] rather
+        # than a single podTemplateSpecPath (contrast with batch/v1 Job).
+        specDefinition:
+          fragmentedPodSpecDefinition:
+            schedulerNamePath: .spec.template.cliques[].spec.podSpec.schedulerName
+            labelsPath: .spec.template.cliques[].labels
+            annotationsPath: .spec.template.cliques[].annotations
+            # DRA claim path when cliques request devices via ResourceClaims.
+            resourceClaimsPath: .spec.template.cliques[].spec.podSpec.resourceClaims
+            podAffinityPath: .spec.template.cliques[].spec.podSpec.affinity.podAffinity
+            nodeAffinityPath: .spec.template.cliques[].spec.podSpec.affinity.nodeAffinity
+            containersPath: .spec.template.cliques[].spec.podSpec.containers
+            priorityClassNamePath: .spec.template.cliques[].spec.podSpec.priorityClassName
+        scaleDefinition:
+          # Total pods for a clique = PCS replicas × clique replicas.
+          replicasPath: (.spec.replicas // 1) * (.spec.template.cliques[].spec.replicas // 1)
+          minReplicasPath: .spec.template.cliques[].spec.autoScalingConfig.minReplicas
+          maxReplicasPath: .spec.template.cliques[].spec.autoScalingConfig.maxReplicas
+        instanceIdPath: .spec.template.cliques[].name
+        # podSelector: how to find live pods that belong to this component instance.
+        podSelector:
+          componentInstanceSelector:
+            idPath: .metadata.labels["grove.io/podclique"]
+          replicaSelector:
+            keyPath: .metadata.labels["grove.io/podcliqueset-replica-index"]
+      - name: scalinggroup
+        kind:
+          group: grove.io
+          version: v1alpha1
+          kind: PodCliqueScalingGroup
+        ownerRef: podcliqueset
+        scaleDefinition:
+          replicasPath: (.spec.replicas // 1) * (.spec.template.podCliqueScalingGroups[].replicas // 1)
+          minReplicasPath: .spec.template.podCliqueScalingGroups[].scaleConfig.minReplicas
+          maxReplicasPath: .spec.template.podCliqueScalingGroups[].scaleConfig.maxReplicas
+        instanceIdPath: .spec.template.podCliqueScalingGroups[].name
+        podSelector:
+          componentInstanceSelector:
+            idPath: .metadata.labels["grove.io/podcliquescalinggroup"]
+          replicaSelector:
+            keyPath: .metadata.labels["grove.io/podcliquescalinggroup-replica-index"]
+    # additionalChildKinds: extra kinds to walk when resolving the workload tree
+    # (including Grove's PodGang scheduling object).
+    additionalChildKinds:
+      - group: grove.io
+        version: v1alpha1
+        kind: PodClique
+      - group: grove.io
+        version: v1alpha1
+        kind: PodCliqueScalingGroup
+      - group: scheduler.grove.io
+        version: v1alpha1
+        kind: PodGang
+  # optimizationInstructions: co-schedule pods that share these label keys.
+  # Hint only — does not bind pods; scheduler / Workload API / KAI (if present) place.
+  optimizationInstructions:
+    gangScheduling:
+      podGroups:
+        - name: podcliqueset-replica
+          members:
+            - componentName: clique
+              groupByKeyPaths:
+                - .metadata.labels["app.kubernetes.io/part-of"]
+                - .metadata.labels["grove.io/podcliqueset-replica-index"]
+            - componentName: scalinggroup
+              groupByKeyPaths:
+                - .metadata.labels["app.kubernetes.io/part-of"]
+                - .metadata.labels["grove.io/podcliqueset-replica-index"]
+{{- end }}

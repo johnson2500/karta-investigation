@@ -1,0 +1,10 @@
+# Grove operator: default-scheduler only — never KAI / Volcano profiles.
+# Missing kai/volcano CRDs crash Grove if those profiles stay enabled.
+config:
+  server:
+    healthProbes:
+      enable: true
+  scheduler:
+    profiles:
+      - name: default-scheduler
+    defaultProfileName: default-scheduler

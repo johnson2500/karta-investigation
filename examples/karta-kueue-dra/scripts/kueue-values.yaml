@@ -1,0 +1,35 @@
+# Kueue Helm values for the Karta + Kueue + DRA showcase (fed to the Kueue install).
+# Role: enable batch/job integration and map DRA DeviceClasses → a logical quota name
+#       that ClusterQueue can cover (example.com/gpu).
+# Stakeholder question: how does Kueue account for DRA ResourceClaimTemplates (not nvidia.com/gpu)?
+# Requires Kueue ≥ 0.18 deviceClassMappings; KueueDRAIntegration feature gate (default on in 0.19).
+# Cluster still needs DRA APIs / a device driver for real allocation — this only configures accounting.
+#
+# Chart path (kueue ≥ 0.19): top-level managerConfig.controllerManagerConfigYaml
+# (NOT controllerManager.managerConfig — that key is ignored by the chart).
+managerConfig:
+  controllerManagerConfigYaml: |
+    apiVersion: config.kueue.x-k8s.io/v1beta2
+    kind: Configuration
+    health:
+      healthProbeBindAddress: :8081
+    metrics:
+      bindAddress: :8443
+    webhook:
+      port: 9443
+    leaderElection:
+      leaderElect: true
+      resourceName: c1f6bfd2.kueue.x-k8s.io
+    integrations:
+      frameworks:
+        # Admit classic batch/v1 Jobs (our sample workloads).
+        - batch/job
+    # Only manage Jobs that opt in via kueue.x-k8s.io/queue-name.
+    manageJobsWithoutQueueName: false
+    resources:
+      deviceClassMappings:
+        # Logical name used in ClusterQueue coveredResources / nominalQuota.
+        - name: example.com/gpu
+          # Must match DeviceClass metadata.name (templates/dra-deviceclass.yaml).
+          deviceClassNames:
+            - gpu.example.com

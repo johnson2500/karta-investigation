@@ -1,0 +1,19 @@
+{{- if .Values.kueue.enabled }}
+# Kueue ResourceFlavor — Layer 1 capacity pool identity for DRA GPU quota.
+# Role: names the flavor referenced by ClusterQueue; optional nodeLabels pin which nodes
+#       count toward that pool (empty = any node — fine for dry-run / single-pool demos).
+# Stakeholder question: where does Kueue attach “DRA GPU quota” before devices are allocated?
+# Pair with ClusterQueue coveredResources including example.com/gpu.
+apiVersion: kueue.x-k8s.io/v1beta1
+kind: ResourceFlavor
+metadata:
+  name: {{ .Values.kueue.resourceFlavor.name }}
+  labels:
+    {{- include "karta-kueue-dra.labels" . | nindent 4 }}
+{{- with .Values.kueue.resourceFlavor.nodeLabels }}
+spec:
+  # When set, only nodes with these labels attract Workloads using this flavor.
+  nodeLabels:
+    {{- toYaml . | nindent 4 }}
+{{- end }}
+{{- end }}

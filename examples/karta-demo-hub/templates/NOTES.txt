@@ -1,0 +1,35 @@
+------------------------------------------------------------
+  Karta demo gallery hub
+------------------------------------------------------------
+
+1. Shared operators (once per cluster):
+
+   ./scripts/install-shared-operators.sh
+
+2. This release deploys the guided UI only. Sample CRs stay in sibling
+   example charts — apply them one-by-one from the gallery.
+
+{{- if .Values.route.enabled }}
+
+3. Open the gallery Route:
+
+   oc get route {{ include "karta-demo-hub.fullname" . }} -n {{ .Release.Namespace }} \
+     -o jsonpath='{.spec.host}{"\n"}'
+
+   https://$(oc get route {{ include "karta-demo-hub.fullname" . }} -n {{ .Release.Namespace }} -o jsonpath='{.spec.host}')
+{{- else }}
+
+3. Port-forward the Service:
+
+   oc port-forward -n {{ .Release.Namespace }} svc/{{ include "karta-demo-hub.fullname" . }} {{ .Values.service.port }}:{{ .Values.service.port }}
+{{- end }}
+
+4. In the UI: pick a demo → follow the runthrough / presentation →
+   copy the Helm install command when you are ready to apply sample CRs.
+
+Image (build from repo root — not from this chart directory alone):
+
+   ./scripts/build-image.sh
+   # or from run-ai-karta root:
+   # podman build -f examples/karta-demo-hub/Containerfile -t {{ .Values.image.repository }}:{{ .Values.image.tag }} .
+------------------------------------------------------------

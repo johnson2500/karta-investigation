@@ -1,0 +1,102 @@
+{% extends "base.html" %}
+{% block title %}{{ demo.title }} · Karta demo gallery{% endblock %}
+{% block content %}
+<nav class="crumb">
+  <a href="/">Gallery</a>
+  <span>/</span>
+  <span>{{ demo.title }}</span>
+</nav>
+
+<section class="panel">
+  <h1>{{ demo.title }}</h1>
+  <p>{{ demo.blurb }}</p>
+  <ul class="badge-row">
+    {% for op in operator_statuses %}
+    <li class="badge {% if op.ready == true %}ok{% elif op.ready == false %}bad{% else %}unk{% endif %}">
+      <span class="badge-label">{{ op.label }}</span>
+      <span class="badge-state">{% if op.ready == true %}ready{% elif op.ready == false %}missing{% else %}unknown{% endif %}</span>
+    </li>
+    {% endfor %}
+  </ul>
+  <p class="meta">
+    Suggested: <code>helm … -n {{ demo.namespace }}</code>
+    {% if demo_status.namespaceExists == true %}
+      · <span class="ok-text">namespace {{ demo.namespace }} exists</span>
+    {% elif demo_status.namespaceExists == false %}
+      · <span class="muted">namespace not created yet</span>
+    {% endif %}
+  </p>
+</section>
+
+<section class="panel commands">
+  <h2>Apply sample CRs (when ready)</h2>
+  <p class="hint">Run from the <code>run-ai-karta</code> repo root. The gallery does not apply charts for you.</p>
+  <div class="cmd-block">
+    <label>Install</label>
+    <pre><code id="cmd-install">{{ demo.helmInstall }}</code></pre>
+    <button type="button" class="btn btn-secondary" onclick="navigator.clipboard.writeText(document.getElementById('cmd-install').innerText)">Copy</button>
+  </div>
+  <div class="cmd-block">
+    <label>Verify</label>
+    <pre><code>{% for c in demo.verifyCommands %}{{ c }}
+{% endfor %}</code></pre>
+  </div>
+  <div class="cmd-block">
+    <label>Teardown</label>
+    <pre><code id="cmd-uninstall">{{ demo.helmUninstall }}</code></pre>
+    <button type="button" class="btn btn-secondary" onclick="navigator.clipboard.writeText(document.getElementById('cmd-uninstall').innerText)">Copy</button>
+  </div>
+</section>
+
+{% if has_presentation %}
+<section class="panel">
+  <h2>Presentation</h2>
+  <p><a class="btn btn-secondary" href="/demos/{{ demo.id }}/presentation/index.html" target="_blank" rel="noopener">Open slide deck</a></p>
+  <iframe class="deck-frame" title="{{ demo.title }} presentation" src="/demos/{{ demo.id }}/presentation/index.html"></iframe>
+</section>
+{% endif %}
+
+<section class="panel steps" id="steps">
+  <h2>Lab steps</h2>
+  {% if not sections %}
+  <p class="hint">Runthrough markdown was not baked into this image for <code>{{ demo.id }}</code>.</p>
+  {% else %}
+  <div class="step-nav">
+    <span>Step {{ step + 1 }} / {{ sections|length }}</span>
+    <div class="step-links">
+      {% if step > 0 %}
+      <a class="btn btn-secondary" href="/demos/{{ demo.id }}?step={{ step - 1 }}#steps">Previous</a>
+      {% endif %}
+      {% if step + 1 < sections|length %}
+      <a class="btn" href="/demos/{{ demo.id }}?step={{ step + 1 }}#steps">Next step</a>
+      {% endif %}
+    </div>
+  </div>
+  <ol class="step-dots">
+    {% for s in sections %}
+    <li>
+      <a href="/demos/{{ demo.id }}?step={{ loop.index0 }}#steps" class="{% if loop.index0 == step %}active{% endif %}" title="{{ s.title }}">{{ loop.index }}</a>
+    </li>
+    {% endfor %}
+  </ol>
+  <article class="step-body">
+    <h3>{{ section.title }}</h3>
+    <div class="md-body">{{ section.html | safe }}</div>
+  </article>
+  {% endif %}
+</section>
+
+<nav class="demo-pager">
+  {% if prev_demo %}
+  <a href="/demos/{{ prev_demo.id }}">← {{ prev_demo.title }}</a>
+  {% else %}
+  <span></span>
+  {% endif %}
+  <a href="/">All demos</a>
+  {% if next_demo %}
+  <a href="/demos/{{ next_demo.id }}">{{ next_demo.title }} →</a>
+  {% else %}
+  <span></span>
+  {% endif %}
+</nav>
+{% endblock %}

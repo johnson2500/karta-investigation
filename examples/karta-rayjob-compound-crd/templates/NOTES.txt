@@ -1,0 +1,17 @@
+Karta RayJob compound-CRD showcase ({{ .Release.Name }})
+
+What was installed in namespace {{ .Release.Namespace }}:
+{{- if and .Values.karta.enabled .Values.karta.rayJob.enabled }}
+  - Karta map: {{ .Values.karta.rayJob.name }} (ray.io/v1 RayJob)
+{{- end }}
+{{- if .Values.rayJob.enabled }}
+  - Sample RayJob: {{ .Values.rayJob.name }}
+{{- end }}
+
+Verify:
+  oc get karta {{ .Values.karta.rayJob.name }}
+  oc get rayjob -n {{ .Release.Namespace }}
+  oc get pods -n {{ .Release.Namespace }} -l ray.io/is-ray-node=yes
+
+Inspect the map (JQ paths into head/worker templates + statusMappings):
+  oc get karta {{ .Values.karta.rayJob.name }} -o yaml

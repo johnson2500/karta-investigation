@@ -1,0 +1,88 @@
+# Sample CRs only. Install operators first via scripts/install-operators.sh.
+
+nameOverride: ""
+fullnameOverride: ""
+
+# Karta maps: one blueprint per workload kind. Same operator serves both.
+karta:
+  enabled: true
+  grovePodCliqueSet:
+    enabled: true
+    # Chart-prefixed: cluster-scoped Karta CRs cannot be shared across Helm releases.
+    name: grove-kueue-podcliqueset-v1alpha1
+  # Maps core batch/v1 Job — the same API OpenShift uses for batch work.
+  batchJob:
+    enabled: true
+    name: grove-kueue-batch-job-v1
+
+grove:
+  enabled: true
+  podCliqueSet:
+    name: grove-demo
+    replicas: 1
+    cliqueName: worker
+    cliqueReplicas: 2
+    image: busybox:1.36
+    command:
+      - /bin/sh
+      - -c
+      - echo grove-ok && sleep infinity
+    resources:
+      requests:
+        cpu: 20m
+        memory: 32Mi
+
+kueue:
+  enabled: true
+  resourceFlavor:
+    # Chart-prefixed to avoid clashing with karta-openshift-workload-api.
+    name: grove-kueue-flavor
+  clusterQueue:
+    name: demo-cluster-queue
+    # Quota covers both sample Jobs admitting together.
+    nominalQuota:
+      cpu: "2"
+      memory: 2Gi
+  localQueue:
+    name: demo-queue
+  # Multiple Jobs, all admitted through the same LocalQueue.
+  # Both are batch/v1 Jobs that the grove-kueue-batch-job-v1 Karta describes.
+  sampleJobs:
+    - name: kueue-demo-job
+      enabled: true
+      # Vanilla Kubernetes batch Job.
+      image: busybox:1.36
+      command:
+        - /bin/sh
+        - -c
+        - echo kueue-ok && sleep 30
+      resources:
+        requests:
+          cpu: 100m
+          memory: 64Mi
+        limits:
+          cpu: 100m
+          memory: 64Mi
+    - name: openshift-batch-job
+      enabled: true
+      # Same Job API, labeled/secured the way OpenShift workloads typically look.
+      # Karta grove-kueue-batch-job-v1 maps this the same as kueue-demo-job.
+      labels:
+        app.openshift.io/runtime: busybox
+        app.kubernetes.io/component: batch
+      annotations:
+        description: OpenShift-style batch Job admitted by Kueue
+      # restricted-v2–friendly settings (works on OpenShift restricted SCC).
+      openshiftRestricted: true
+      image: busybox:1.36
+      command:
+        - /bin/sh
+        - -c
+        - echo openshift-batch-ok && sleep 30
+      resources:
+        requests:
+          cpu: 100m
+          memory: 64Mi
+        limits:
+          cpu: 100m
+          memory: 64Mi

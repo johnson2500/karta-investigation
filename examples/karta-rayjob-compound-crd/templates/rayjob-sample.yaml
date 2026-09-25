@@ -1,0 +1,94 @@
+{{- if .Values.rayJob.enabled }}
+# Standard RayJob CR — KubeRay owns lifecycle; Karta only describes the schema.
+apiVersion: ray.io/v1
+kind: RayJob
+metadata:
+  name: {{ .Values.rayJob.name }}
+  labels:
+    {{- include "karta-rayjob-compound-crd.labels" . | nindent 4 }}
+    app.openshift.io/runtime: ray
+spec:
+  entrypoint: {{ .Values.rayJob.entrypoint | quote }}
+  shutdownAfterJobFinishes: {{ .Values.rayJob.shutdownAfterJobFinishes }}
+  ttlSecondsAfterFinished: {{ .Values.rayJob.ttlSecondsAfterFinished }}
+  rayClusterSpec:
+    rayVersion: "2.46.0"
+    headGroupSpec:
+      rayStartParams:
+        dashboard-host: "0.0.0.0"
+      template:
+        metadata:
+          labels:
+            {{- include "karta-rayjob-compound-crd.selectorLabels" . | nindent 12 }}
+        spec:
+          {{- if .Values.rayJob.openshiftRestricted }}
+          securityContext:
+            runAsNonRoot: true
+            seccompProfile:
+              type: RuntimeDefault
+          {{- end }}
+          containers:
+            - name: ray-head
+              image: {{ .Values.rayJob.image | quote }}
+              ports:
+                - containerPort: 6379
+                  name: gcs
+                - containerPort: 8265
+                  name: dashboard
+                - containerPort: 10001
+                  name: client
+              resources:
+                requests:
+                  cpu: {{ .Values.rayJob.head.cpu | quote }}
+                  memory: {{ .Values.rayJob.head.memory | quote }}
+                limits:
+                  cpu: {{ .Values.rayJob.head.cpu | quote }}
+                  memory: {{ .Values.rayJob.head.memory | quote }}
+              {{- if .Values.rayJob.openshiftRestricted }}
+              securityContext:
+                allowPrivilegeEscalation: false
+                capabilities:
+                  drop:
+                    - ALL
+                runAsNonRoot: true
+                seccompProfile:
+                  type: RuntimeDefault
+              {{- end }}
+    workerGroupSpecs:
+      - groupName: {{ .Values.rayJob.worker.groupName }}
+        replicas: {{ .Values.rayJob.worker.replicas }}
+        minReplicas: {{ .Values.rayJob.worker.minReplicas }}
+        maxReplicas: {{ .Values.rayJob.worker.maxReplicas }}
+        rayStartParams: {}
+        template:
+          metadata:
+            labels:
+              {{- include "karta-rayjob-compound-crd.selectorLabels" . | nindent 14 }}
+          spec:
+            {{- if .Values.rayJob.openshiftRestricted }}
+            securityContext:
+              runAsNonRoot: true
+              seccompProfile:
+                type: RuntimeDefault
+            {{- end }}
+            containers:
+              - name: ray-worker
+                image: {{ .Values.rayJob.image | quote }}
+                resources:
+                  requests:
+                    cpu: {{ .Values.rayJob.worker.cpu | quote }}
+                    memory: {{ .Values.rayJob.worker.memory | quote }}
+                  limits:
+                    cpu: {{ .Values.rayJob.worker.cpu | quote }}
+                    memory: {{ .Values.rayJob.worker.memory | quote }}
+                {{- if .Values.rayJob.openshiftRestricted }}
+                securityContext:
+                  allowPrivilegeEscalation: false
+                  capabilities:
+                    drop:
+                      - ALL
+                  runAsNonRoot: true
+                  seccompProfile:
+                    type: RuntimeDefault
+                {{- end }}
+{{- end }}

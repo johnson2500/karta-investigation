@@ -1,0 +1,11 @@
+# Guided gallery UI for all run-ai-karta examples.
+# Installs the hub app only — operators via scripts/install-shared-operators.sh;
+# each demo's sample CRs stay in the sibling example charts (apply on demand).
+apiVersion: v2
+name: karta-demo-hub
+description: >-
+  Guided demo gallery — step through Karta examples one-by-one with
+  presentations, runthrough labs, and copy-paste Helm commands
+type: application
+version: 0.1.0
+appVersion: "0.1.0"

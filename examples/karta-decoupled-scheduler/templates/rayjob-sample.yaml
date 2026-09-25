@@ -1,0 +1,93 @@
+{{- if .Values.rayJob.enabled }}
+# Optional RayJob on default-scheduler — enable alongside karta.rayJob.enabled.
+apiVersion: ray.io/v1
+kind: RayJob
+metadata:
+  name: {{ .Values.rayJob.name }}
+  labels:
+    {{- include "karta-decoupled-scheduler.labels" . | nindent 4 }}
+  annotations:
+    karta.run.ai/podgroup-name: {{ .Values.rayJob.name }}-job
+    karta.run.ai/podgroup-members: head,worker
+spec:
+  entrypoint: {{ .Values.rayJob.entrypoint | quote }}
+  shutdownAfterJobFinishes: {{ .Values.rayJob.shutdownAfterJobFinishes }}
+  ttlSecondsAfterFinished: {{ .Values.rayJob.ttlSecondsAfterFinished }}
+  rayClusterSpec:
+    rayVersion: "2.46.0"
+    headGroupSpec:
+      rayStartParams:
+        dashboard-host: "0.0.0.0"
+      template:
+        metadata:
+          labels:
+            {{- include "karta-decoupled-scheduler.selectorLabels" . | nindent 12 }}
+          annotations:
+            karta.run.ai/component: head
+        spec:
+          {{- if .Values.rayJob.openshiftRestricted }}
+          securityContext:
+            runAsNonRoot: true
+            seccompProfile:
+              type: RuntimeDefault
+          {{- end }}
+          containers:
+            - name: ray-head
+              image: {{ .Values.rayJob.image | quote }}
+              resources:
+                requests:
+                  cpu: {{ .Values.rayJob.head.cpu | quote }}
+                  memory: {{ .Values.rayJob.head.memory | quote }}
+                limits:
+                  cpu: {{ .Values.rayJob.head.cpu | quote }}
+                  memory: {{ .Values.rayJob.head.memory | quote }}
+              {{- if .Values.rayJob.openshiftRestricted }}
+              securityContext:
+                allowPrivilegeEscalation: false
+                capabilities:
+                  drop:
+                    - ALL
+                runAsNonRoot: true
+                seccompProfile:
+                  type: RuntimeDefault
+              {{- end }}
+    workerGroupSpecs:
+      - groupName: {{ .Values.rayJob.worker.groupName }}
+        replicas: {{ .Values.rayJob.worker.replicas }}
+        minReplicas: {{ .Values.rayJob.worker.minReplicas }}
+        maxReplicas: {{ .Values.rayJob.worker.maxReplicas }}
+        rayStartParams: {}
+        template:
+          metadata:
+            labels:
+              {{- include "karta-decoupled-scheduler.selectorLabels" . | nindent 14 }}
+            annotations:
+              karta.run.ai/component: worker
+          spec:
+            {{- if .Values.rayJob.openshiftRestricted }}
+            securityContext:
+              runAsNonRoot: true
+              seccompProfile:
+                type: RuntimeDefault
+            {{- end }}
+            containers:
+              - name: ray-worker
+                image: {{ .Values.rayJob.image | quote }}
+                resources:
+                  requests:
+                    cpu: {{ .Values.rayJob.worker.cpu | quote }}
+                    memory: {{ .Values.rayJob.worker.memory | quote }}
+                  limits:
+                    cpu: {{ .Values.rayJob.worker.cpu | quote }}
+                    memory: {{ .Values.rayJob.worker.memory | quote }}
+                {{- if .Values.rayJob.openshiftRestricted }}
+                securityContext:
+                  allowPrivilegeEscalation: false
+                  capabilities:
+                    drop:
+                      - ALL
+                  runAsNonRoot: true
+                  seccompProfile:
+                    type: RuntimeDefault
+                {{- end }}
+{{- end }}

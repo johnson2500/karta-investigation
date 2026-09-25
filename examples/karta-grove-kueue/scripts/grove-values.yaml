@@ -1,0 +1,10 @@
+# Grove operator values for this example: enable only default-scheduler.
+# Chart defaults also list kai/volcano/lpx; missing CRDs crash the operator at startup.
+config:
+  server:
+    healthProbes:
+      enable: true
+  scheduler:
+    profiles:
+      - name: default-scheduler
+    defaultProfileName: default-scheduler

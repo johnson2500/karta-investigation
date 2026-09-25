@@ -1,0 +1,12 @@
+# Enable Kueue RayJob integration via the official Helm value path.
+controllerManager:
+  managerConfig:
+    controllerManagerConfigYaml: |
+      apiVersion: config.kueue.x-k8s.io/v1beta1
+      kind: Configuration
+      integrations:
+        frameworks:
+          - batch/job
+          - ray.io/rayjob
+          - ray.io/raycluster
+      manageJobsWithoutQueueName: false

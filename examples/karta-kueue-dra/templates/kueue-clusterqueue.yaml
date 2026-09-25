@@ -1,0 +1,31 @@
+{{- if .Values.kueue.enabled }}
+# Kueue ClusterQueue — Layer 1 admission boundary for CPU/memory + DRA logical GPUs.
+# Role: define nominalQuota so Kueue admits/unsuspends Jobs only when quota remains.
+# Stakeholder demo: example.com/gpu quota "1" → second Job’s Workload stays Pending.
+# Logical name example.com/gpu must match deviceClassMappings in scripts/kueue-values.yaml.
+apiVersion: kueue.x-k8s.io/v1beta1
+kind: ClusterQueue
+metadata:
+  name: {{ .Values.kueue.clusterQueue.name }}
+  labels:
+    {{- include "karta-kueue-dra.labels" . | nindent 4 }}
+spec:
+  # Empty selector = all namespaces that reference this CQ via a LocalQueue.
+  namespaceSelector: {}
+  resourceGroups:
+    - coveredResources:
+        - cpu
+        - memory
+        # DRA accounting name (not nvidia.com/gpu); mapped from DeviceClass by Kueue config.
+        - example.com/gpu
+      flavors:
+        - name: {{ .Values.kueue.resourceFlavor.name }}
+          resources:
+            - name: cpu
+              nominalQuota: {{ .Values.kueue.clusterQueue.nominalQuota.cpu | quote }}
+            - name: memory
+              nominalQuota: {{ .Values.kueue.clusterQueue.nominalQuota.memory | quote }}
+            - name: example.com/gpu
+              # Strict 1 is the PoC lever: admit one DRA Job, queue the other.
+              nominalQuota: {{ index .Values.kueue.clusterQueue.nominalQuota "example.com/gpu" | quote }}
+{{- end }}

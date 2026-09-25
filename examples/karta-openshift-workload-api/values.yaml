@@ -1,0 +1,110 @@
+# Sample CRs only. Install operators first via scripts/install-operators.sh.
+# This chart never installs KAI or Run:ai control-plane components.
+
+nameOverride: ""
+fullnameOverride: ""
+
+# ---------------------------------------------------------------------------
+# Karta — declarative CRD → PodGroup-like schema maps (not a scheduler)
+# ---------------------------------------------------------------------------
+karta:
+  enabled: true
+  grovePodCliqueSet:
+    enabled: true
+    # Chart-prefixed: cluster-scoped Karta CRs cannot be shared across Helm releases.
+    name: openshift-ai-grove-podcliqueset-v1alpha1
+  batchJob:
+    enabled: true
+    name: openshift-ai-batch-job-v1
+
+# ---------------------------------------------------------------------------
+# Grove — multi-pod clique topology on default-scheduler (no KAI profile)
+# ---------------------------------------------------------------------------
+grove:
+  enabled: true
+  podCliqueSet:
+    name: grove-openshift-demo
+    replicas: 1
+    cliqueName: worker
+    cliqueReplicas: 2
+    image: busybox:1.36
+    command:
+      - /bin/sh
+      - -c
+      - echo grove-openshift-ok && sleep infinity
+    resources:
+      requests:
+        cpu: 20m
+        memory: 32Mi
+
+# ---------------------------------------------------------------------------
+# Kueue — multi-tenant admission / quota (OpenShift AI path)
+# ---------------------------------------------------------------------------
+kueue:
+  enabled: true
+  resourceFlavor:
+    # Chart-prefixed to avoid clashing with karta-grove-kueue's ResourceFlavor.
+    name: openshift-ai-flavor
+  clusterQueue:
+    name: openshift-ai-cluster-queue
+    nominalQuota:
+      cpu: "4"
+      memory: 4Gi
+      # Logical GPU budget — maps to time-slice / MIG / DRA naming in real clusters.
+      "nvidia.com/gpu": "2"
+  localQueue:
+    name: openshift-ai-queue
+
+# ---------------------------------------------------------------------------
+# Workload API — native kube-scheduler gang / group scheduling (replaces KAI)
+# Requires GenericWorkload (+ optionally GangScheduling) feature gates.
+#
+# Split flags: if the Workload CRD is missing, set workload.enabled=false ONLY.
+# Keep gangJob.enabled=true so Kueue still admits a sample Job (annotations
+# document the intended Workload API contract even without the CR).
+# ---------------------------------------------------------------------------
+workloadApi:
+  enabled: true
+  # Illustrative scheduling.k8s.io Workload CR (gang of workers).
+  workload:
+    enabled: true
+    name: gang-training-workload
+    templateName: workers
+    minCount: 2
+  # batch/v1 Job admitted by Kueue — independent of Workload CR presence.
+  gangJob:
+    enabled: true
+    name: gang-training-job
+    parallelism: 2
+    completions: 2
+    image: busybox:1.36
+    command:
+      - /bin/sh
+      - -c
+      - echo gang-worker-ok && sleep 60
+    resources:
+      requests:
+        cpu: 100m
+        memory: 64Mi
+      limits:
+        cpu: 100m
+        memory: 64Mi
+
+# ---------------------------------------------------------------------------
+# Fractional GPU samples — documentation CRs (not applied unless enabled)
+# Time-slicing ClusterPolicy fragment + MIG / Dynamic Slicer notes live in
+# fractional-gpus.md. Opt-in so clusters without GPU Operator stay clean.
+# ---------------------------------------------------------------------------
+fractionalGpu:
+  # Render a commented / optional ClusterPolicy snippet for NVIDIA time-slicing.
+  timeSlicing:
+    enabled: false
+    name: gpu-timeslice-demo
+    replicas: 4
+  # Sample inference pod that requests one time-slice replica.
+  inferencePod:
+    enabled: false
+    name: ml-inference-timeslice
+    image: busybox:1.36
+    gpuResource: "nvidia.com/gpu"
+    gpuCount: "1"

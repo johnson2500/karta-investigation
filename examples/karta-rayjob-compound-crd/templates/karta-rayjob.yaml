@@ -1,0 +1,138 @@
+{{- if and .Values.karta.enabled .Values.karta.rayJob.enabled }}
+# =============================================================================
+# Karta map for ray.io/v1 RayJob — zero-code compound CRD showcase
+# =============================================================================
+# What this CR is: declarative schema translation (YAML + JQ). It teaches the
+# platform how to walk a compound RayJob (head + worker templates, status, gang)
+# WITHOUT writing a dedicated Go controller and WITHOUT changing KubeRay / Grove / KAI.
+#
+# KubeRay still owns RayJob lifecycle (creates pods). Karta only describes schema.
+# Grove and KAI are optional consumers — not required for this map to exist.
+#
+# Stakeholder proof: onboarding a new AI framework ≈ a Karta YAML, not an operator fork.
+#
+# Adapted from dsx-ai-factory/workload-map docs/catalog/ray-io-rayjob-v1.yaml
+# Plus byConditions for Complete / Running / Failed (status unification demo).
+# =============================================================================
+apiVersion: run.ai/v1alpha1
+kind: Karta
+metadata:
+  name: {{ .Values.karta.rayJob.name }}
+  labels:
+    {{- include "karta-rayjob-compound-crd.labels" . | nindent 4 }}
+spec:
+  structureDefinition:
+    rootComponent:
+      name: rayjob
+      kind:
+        group: ray.io
+        version: v1
+        kind: RayJob
+      statusDefinition:
+        # KubeRay exposes both a phase string and condition objects — map both.
+        phaseDefinition:
+          path: .status.jobStatus
+        conditionsDefinition:
+          path: .status.conditions
+          typeFieldName: type
+          statusFieldName: status
+          messageFieldName: message
+          reasonFieldName: reason
+        # statusMappings: normalize Ray into portable platform phases
+        # (initializing / running / completed / failed / suspended).
+        # Mix of byPhase, byConditions, and byExpression so either signal works.
+        statusMappings:
+          initializing:
+            - byPhase: PENDING
+            - byExpression:
+                expression: .status.jobDeploymentStatus == "Initializing"
+                expectedResult: "true"
+          running:
+            - byPhase: RUNNING
+            - byConditions:
+                - type: Running
+                  status: "True"
+            - byExpression:
+                expression: (.status.jobStatus // "") == "RUNNING"
+                expectedResult: "true"
+          completed:
+            - byPhase: SUCCEEDED
+            - byConditions:
+                - type: Complete
+                  status: "True"
+            - byExpression:
+                expression: (.status.jobStatus // "") == "SUCCEEDED"
+                expectedResult: "true"
+          failed:
+            - byPhase: FAILED
+            - byConditions:
+                - type: Failed
+                  status: "True"
+            - byExpression:
+                expression: (.status.jobStatus // "") == "FAILED"
+                expectedResult: "true"
+          suspended:
+            - byExpression:
+                expression: .status.jobDeploymentStatus == "Suspended"
+                expectedResult: "true"
+      # How controllers pause/resume RayJobs (same field Kueue uses when integrated).
+      suspendDefinition:
+        suspendActions:
+          - path: .spec.suspend
+            value: "true"
+        resumeActions:
+          - path: .spec.suspend
+            value: "false"
+    # childComponents: compound CRD — head + worker group templates under rayClusterSpec.
+    # These JQ paths REPLACE hard-coded Go structs that would otherwise be needed per CRD.
+    childComponents:
+      - name: head
+        kind:
+          group: ""
+          version: v1
+          kind: Pod
+        ownerRef: rayjob
+        specDefinition:
+          # Full pod template for the Ray head (CPU/GPU, affinity, schedulerName, …).
+          podTemplateSpecPath: .spec.rayClusterSpec.headGroupSpec.template
+        scaleDefinition:
+          replicasPath: "1"
+        podSelector:
+          componentTypeSelector:
+            keyPath: .metadata.labels["ray.io/node-type"]
+            value: head
+      - name: worker
+        kind:
+          group: ""
+          version: v1
+          kind: Pod
+        ownerRef: rayjob
+        specDefinition:
+          # [] walks every worker group; each has its own template + replicas.
+          podTemplateSpecPath: .spec.rayClusterSpec.workerGroupSpecs[].template
+        scaleDefinition:
+          replicasPath: .spec.rayClusterSpec.workerGroupSpecs[].replicas // 1
+          minReplicasPath: .spec.rayClusterSpec.workerGroupSpecs[].minReplicas
+          maxReplicasPath: .spec.rayClusterSpec.workerGroupSpecs[].maxReplicas
+        instanceIdPath: .spec.rayClusterSpec.workerGroupSpecs[].groupName
+        podSelector:
+          componentTypeSelector:
+            keyPath: .metadata.labels["ray.io/node-type"]
+            value: worker
+          componentInstanceSelector:
+            idPath: .metadata.labels["ray.io/group"]
+  # optimizationInstructions: gang / co-scheduling hints for EWI, WAS, or future mappers.
+  # Aligns with WG WAS / KEP-6012 CompositePodGroup — portable PodGroup hierarchy.
+  # Does NOT require KAI; placement remains pluggable.
+  optimizationInstructions:
+    gangScheduling:
+      podGroups:
+        - name: job
+          members:
+            - componentName: head
+              groupByKeyPaths:
+                - .metadata.labels["ray.io/cluster"]
+            - componentName: worker
+              groupByKeyPaths:
+                - .metadata.labels["ray.io/cluster"]
+{{- end }}

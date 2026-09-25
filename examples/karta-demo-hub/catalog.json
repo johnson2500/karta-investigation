@@ -1,0 +1,153 @@
+{
+  "operators": [
+    {
+      "id": "karta",
+      "label": "Karta",
+      "namespace": "karta-system",
+      "deployment": "karta"
+    },
+    {
+      "id": "kueue",
+      "label": "Kueue",
+      "namespace": "kueue-system",
+      "deployment": "kueue-controller-manager"
+    },
+    {
+      "id": "grove",
+      "label": "Grove",
+      "namespace": "grove-system",
+      "deployment": "grove-operator",
+      "matchAnyNamespace": true
+    },
+    {
+      "id": "kuberay",
+      "label": "KubeRay",
+      "namespace": "ray-system",
+      "deployment": "kuberay-operator",
+      "matchAnyNamespace": true
+    },
+    {
+      "id": "training",
+      "label": "Training Operator",
+      "namespace": "kubeflow",
+      "deployment": "training-operator",
+      "altNamespace": "redhat-ods-applications",
+      "altDeployment": "kubeflow-training-operator",
+      "optional": true
+    }
+  ],
+  "demos": [
+    {
+      "id": "karta-grove-kueue",
+      "order": 1,
+      "title": "Grove + Kueue coexistence",
+      "blurb": "Karta maps Grove PodCliqueSet and batch Jobs; Grove cliques and Kueue-queued Jobs on one cluster.",
+      "release": "demo",
+      "namespace": "demo",
+      "chartPath": "examples/karta-grove-kueue",
+      "operators": ["karta", "grove", "kueue"],
+      "helmInstall": "helm upgrade --install demo ./examples/karta-grove-kueue -n demo --create-namespace",
+      "helmUninstall": "FORCE=1 ./examples/karta-grove-kueue/scripts/uninstall.sh",
+      "verifyCommands": [
+        "oc get podcliqueset,job -n demo",
+        "oc get clusterqueue,resourceflavor",
+        "oc get workloadmap -A | grep -i grove"
+      ],
+      "runthroughFile": "karta-grove-kueue-runthrough.md",
+      "presentationDir": "presentation"
+    },
+    {
+      "id": "karta-rayjob-compound-crd",
+      "order": 2,
+      "title": "RayJob compound CRD map",
+      "blurb": "Zero-code Karta map for RayJob — YAML only; no KAI or Grove required.",
+      "release": "ray-demo",
+      "namespace": "ray-demo",
+      "chartPath": "examples/karta-rayjob-compound-crd",
+      "operators": ["karta", "kuberay"],
+      "helmInstall": "helm upgrade --install ray-demo ./examples/karta-rayjob-compound-crd -n ray-demo --create-namespace",
+      "helmUninstall": "FORCE=1 ./examples/karta-rayjob-compound-crd/scripts/uninstall.sh",
+      "verifyCommands": [
+        "oc get rayjob -n ray-demo",
+        "oc get workloadmap -A | grep -i ray"
+      ],
+      "runthroughFile": "karta-rayjob-compound-crd-runthrough.md",
+      "presentationDir": "presentation"
+    },
+    {
+      "id": "karta-decoupled-scheduler",
+      "order": 3,
+      "title": "Decoupled scheduler (no KAI)",
+      "blurb": "Karta without KAI: PyTorchJob on the default scheduler (optional RayJob).",
+      "release": "decoupled",
+      "namespace": "decoupled",
+      "chartPath": "examples/karta-decoupled-scheduler",
+      "operators": ["karta", "training"],
+      "helmInstall": "helm upgrade --install decoupled ./examples/karta-decoupled-scheduler -n decoupled --create-namespace",
+      "helmUninstall": "FORCE=1 ./examples/karta-decoupled-scheduler/scripts/uninstall.sh",
+      "verifyCommands": [
+        "oc get pytorchjob -n decoupled",
+        "oc get workloadmap -A | grep -i pytorch"
+      ],
+      "runthroughFile": "karta-decoupled-scheduler-runthrough.md",
+      "presentationDir": "presentation"
+    },
+    {
+      "id": "karta-kueue-admission",
+      "order": 4,
+      "title": "Kueue admission (RayJob + GPU quota)",
+      "blurb": "Three layers: Kueue GPU quota → Karta RayJob map → placement; one admits, one waits.",
+      "release": "admit",
+      "namespace": "admit",
+      "chartPath": "examples/karta-kueue-admission",
+      "operators": ["karta", "kuberay", "kueue"],
+      "helmInstall": "helm upgrade --install admit ./examples/karta-kueue-admission -n admit --create-namespace",
+      "helmUninstall": "FORCE=1 ./examples/karta-kueue-admission/scripts/uninstall.sh",
+      "verifyCommands": [
+        "oc get rayjob -n admit",
+        "oc get workloads.kueue.x-k8s.io -n admit",
+        "oc get clusterqueue"
+      ],
+      "runthroughFile": "karta-kueue-admission-runthrough.md",
+      "presentationDir": "presentation"
+    },
+    {
+      "id": "karta-kueue-dra",
+      "order": 5,
+      "title": "Kueue + DRA",
+      "blurb": "Same admit/queue story via DRA claims on Jobs; shows why Karta still maps the Job.",
+      "release": "dra-demo",
+      "namespace": "dra-demo",
+      "chartPath": "examples/karta-kueue-dra",
+      "operators": ["karta", "kueue"],
+      "helmInstall": "helm upgrade --install dra-demo ./examples/karta-kueue-dra -n dra-demo --create-namespace",
+      "helmUninstall": "FORCE=1 ./examples/karta-kueue-dra/scripts/uninstall.sh",
+      "verifyCommands": [
+        "oc get job -n dra-demo",
+        "oc get resourceclaimtemplate,deviceclass -A",
+        "oc get workloads.kueue.x-k8s.io -n dra-demo"
+      ],
+      "runthroughFile": "karta-kueue-dra-runthrough.md",
+      "presentationDir": "presentation"
+    },
+    {
+      "id": "karta-openshift-workload-api",
+      "order": 6,
+      "title": "OpenShift Workload API path",
+      "blurb": "OpenShift AI alternative to Run:ai/KAI: Karta + Grove + Kueue + Workload API (optional fractional GPUs).",
+      "release": "demo",
+      "namespace": "demo",
+      "chartPath": "examples/karta-openshift-workload-api",
+      "operators": ["karta", "grove", "kueue"],
+      "helmInstall": "helm upgrade --install demo ./examples/karta-openshift-workload-api -n demo --create-namespace",
+      "helmUninstall": "FORCE=1 ./examples/karta-openshift-workload-api/scripts/uninstall.sh",
+      "verifyCommands": [
+        "oc get podcliqueset,job -n demo",
+        "oc get workloads.scheduling.k8s.io -n demo",
+        "oc get clusterqueue,localqueue -A"
+      ],
+      "runthroughFile": "karta-openshift-workload-api-runthrough.md",
+      "presentationDir": "presentation"
+    }
+  ]
+}

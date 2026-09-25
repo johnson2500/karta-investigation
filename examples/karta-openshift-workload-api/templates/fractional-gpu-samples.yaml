@@ -1,0 +1,68 @@
+{{- if .Values.fractionalGpu.timeSlicing.enabled }}
+# Optional: NVIDIA GPU Operator ClusterPolicy fragment for time-slicing.
+# Requires GPU Operator already installed on the cluster.
+# See fractional-gpus.md and:
+# https://docs.nvidia.com/datacenter/cloud-native/openshift/latest/time-slicing-gpus-in-openshift.html
+apiVersion: nvidia.com/v1
+kind: ClusterPolicy
+metadata:
+  name: {{ .Values.fractionalGpu.timeSlicing.name }}
+  labels:
+    {{- include "karta-openshift-workload-api.labels" . | nindent 4 }}
+  annotations:
+    demo.openshift.ai/note: >-
+      Example fragment — merge into your existing ClusterPolicy rather than
+      installing a second full ClusterPolicy on production clusters.
+spec:
+  devicePlugin:
+    config:
+      name: time-slicing-config
+      default: any
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: time-slicing-config
+  namespace: nvidia-gpu-operator
+  labels:
+    {{- include "karta-openshift-workload-api.labels" . | nindent 4 }}
+data:
+  any: |-
+    version: v1
+    sharing:
+      timeSlicing:
+        renameByDefault: false
+        failRequestsGreaterThanOne: false
+        resources:
+          - name: nvidia.com/gpu
+            replicas: {{ .Values.fractionalGpu.timeSlicing.replicas }}
+{{- end }}
+{{- if .Values.fractionalGpu.inferencePod.enabled }}
+---
+# Requests one time-slice replica (e.g. 1 of 4 → ~25% compute time share).
+# Unlike Run:ai, native time-slicing does not enforce hard VRAM isolation.
+apiVersion: v1
+kind: Pod
+metadata:
+  name: {{ .Values.fractionalGpu.inferencePod.name }}
+  labels:
+    {{- include "karta-openshift-workload-api.labels" . | nindent 4 }}
+    app.openshift.io/runtime: inference
+spec:
+  restartPolicy: Never
+  schedulerName: default-scheduler
+  containers:
+    - name: ml-inference
+      image: {{ .Values.fractionalGpu.inferencePod.image | quote }}
+      command: ["/bin/sh", "-c", "echo timeslice-ok && sleep 120"]
+      resources:
+        limits:
+          {{ .Values.fractionalGpu.inferencePod.gpuResource }}: {{ .Values.fractionalGpu.inferencePod.gpuCount | quote }}
+      securityContext:
+        allowPrivilegeEscalation: false
+        capabilities:
+          drop: ["ALL"]
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+{{- end }}

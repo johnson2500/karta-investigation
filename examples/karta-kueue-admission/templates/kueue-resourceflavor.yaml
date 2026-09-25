@@ -1,0 +1,14 @@
+{{- if .Values.kueue.enabled }}
+# ResourceFlavor for the GPU quota pool.
+apiVersion: kueue.x-k8s.io/v1beta1
+kind: ResourceFlavor
+metadata:
+  name: {{ .Values.kueue.resourceFlavor.name }}
+  labels:
+    {{- include "karta-kueue-admission.labels" . | nindent 4 }}
+{{- with .Values.kueue.resourceFlavor.nodeLabels }}
+spec:
+  nodeLabels:
+    {{- toYaml . | nindent 4 }}
+{{- end }}
+{{- end }}

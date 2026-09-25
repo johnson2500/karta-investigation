@@ -1,0 +1,23 @@
+{{- if .Values.dra.enabled }}
+# DRA ResourceClaimTemplate — Layer 3 device request shape (per-pod claim factory).
+# Role: Kubernetes creates one ResourceClaim per Pod from this template at schedule time;
+#       Kueue already admitted the Job against example.com/gpu quota before pods run.
+# Stakeholder question: where does device allocation happen relative to Kueue admission?
+# After admit: DRA + kube-scheduler bind devices; Karta only maps the claim paths on the CRD.
+apiVersion: resource.k8s.io/v1
+kind: ResourceClaimTemplate
+metadata:
+  name: {{ .Values.dra.resourceClaimTemplate.name }}
+  labels:
+    {{- include "karta-kueue-dra.labels" . | nindent 4 }}
+spec:
+  spec:
+    devices:
+      requests:
+        - name: {{ .Values.dra.resourceClaimTemplate.requestName }}
+          exactly:
+            # Must match DeviceClass name (and Kueue deviceClassMappings.deviceClassNames).
+            deviceClassName: {{ .Values.dra.deviceClass.name }}
+            allocationMode: ExactCount
+            count: {{ .Values.dra.resourceClaimTemplate.count }}
+{{- end }}

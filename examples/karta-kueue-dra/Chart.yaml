@@ -1,0 +1,9 @@
+# Helm chart: Karta CRD translation + Kueue admission + DRA device allocation.
+# Stakeholder PoC — answers "is Karta useful when admission is Kueue and devices are DRA?"
+# Does not install operators; pair with scripts/install-operators.sh and scripts/kueue-values.yaml.
+apiVersion: v2
+name: karta-kueue-dra
+description: Stakeholder showcase — Karta CRD translation with Kueue admission and DRA device allocation
+type: application
+version: 0.1.0
+appVersion: "0.1.0"

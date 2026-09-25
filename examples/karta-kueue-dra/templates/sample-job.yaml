@@ -1,0 +1,73 @@
+{{- if and .Values.kueue.enabled .Values.dra.enabled }}
+{{- range .Values.sampleJobs }}
+{{- if .enabled }}
+---
+# Sample batch/v1 Job — application workload for the Karta → Kueue → DRA stack.
+# Role: carry queue-name (Kueue admit), suspend until quota, DRA resourceClaims (allocate),
+#       and annotations Karta can map into a portable PodGroup-like contract.
+# Stakeholder demo: with ClusterQueue GPU quota=1, one Job admits and the other stays Pending.
+# Dual Jobs come from values.sampleJobs (dra-job-admit + dra-job-queued).
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ .name }}
+  labels:
+    {{- include "karta-kueue-dra.labels" $ | nindent 4 }}
+    # Opt-in to Kueue; LocalQueue → ClusterQueue DRA quota check before unsuspend.
+    kueue.x-k8s.io/queue-name: {{ $.Values.kueue.localQueue.name }}
+    app.openshift.io/runtime: batch
+  annotations:
+    # Hint for operators/tools correlating this Job with Karta’s podgroup view.
+    karta.run.ai/podgroup-name: {{ .name }}-job
+spec:
+  # Kueue holds the Job until ClusterQueue has free example.com/gpu quota.
+  suspend: true
+  backoffLimit: 1
+  template:
+    metadata:
+      labels:
+        {{- include "karta-kueue-dra.selectorLabels" $ | nindent 8 }}
+        app.openshift.io/runtime: batch
+      annotations:
+        karta.run.ai/component: job
+    spec:
+      restartPolicy: Never
+      {{- if .openshiftRestricted }}
+      # OpenShift restricted SCC: non-root + RuntimeDefault seccomp at pod level.
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      {{- end }}
+      # DRA: bind a per-pod claim generated from the ResourceClaimTemplate at schedule time.
+      resourceClaims:
+        - name: {{ $.Values.dra.resourceClaimTemplate.requestName }}
+          resourceClaimTemplateName: {{ $.Values.dra.resourceClaimTemplate.name }}
+      containers:
+        - name: worker
+          image: {{ .image | quote }}
+          command:
+            {{- toYaml .command | nindent 12 }}
+          resources:
+            requests:
+              cpu: {{ .cpu | quote }}
+              memory: {{ .memory | quote }}
+            limits:
+              cpu: {{ .cpu | quote }}
+              memory: {{ .memory | quote }}
+            # Map the DRA claim into the container (not nvidia.com/gpu extended resource).
+            claims:
+              - name: {{ $.Values.dra.resourceClaimTemplate.requestName }}
+          {{- if .openshiftRestricted }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            runAsNonRoot: true
+            seccompProfile:
+              type: RuntimeDefault
+          {{- end }}
+{{- end }}
+{{- end }}
+{{- end }}

@@ -1,0 +1,11 @@
+{{- if .Values.kueue.enabled }}
+# Namespace-scoped queue. Jobs select it with kueue.x-k8s.io/queue-name.
+apiVersion: kueue.x-k8s.io/v1beta1
+kind: LocalQueue
+metadata:
+  name: {{ .Values.kueue.localQueue.name }}
+  labels:
+    {{- include "karta-grove-kueue.labels" . | nindent 4 }}
+spec:
+  clusterQueue: {{ .Values.kueue.clusterQueue.name }}
+{{- end }}

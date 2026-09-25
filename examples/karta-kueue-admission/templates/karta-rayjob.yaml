@@ -1,0 +1,122 @@
+{{- if and .Values.karta.enabled .Values.karta.rayJob.enabled }}
+# =============================================================================
+# Karta map for RayJob — Layer 2 in the three-layer admission stack
+# =============================================================================
+# Layers in this demo:
+#   1. Kueue  — admission & GPU quota (nvidia.com/gpu)
+#   2. Karta  — THIS FILE — CRD → PodGroup-oriented translation
+#   3. kube-scheduler / KAI — placement (pluggable)
+#
+# Karta does NOT admit jobs and does NOT bind GPUs. It declares where head/worker
+# templates, status, suspend, and gang groups live so platforms share one contract
+# — without a custom Ray↔Kueue Go bridge.
+#
+# Adapted from dsx-ai-factory/workload-map docs/catalog/ray-io-rayjob-v1.yaml
+# =============================================================================
+apiVersion: run.ai/v1alpha1
+kind: Karta
+metadata:
+  name: {{ .Values.karta.rayJob.name }}
+  labels:
+    {{- include "karta-kueue-admission.labels" . | nindent 4 }}
+spec:
+  structureDefinition:
+    rootComponent:
+      name: rayjob
+      kind:
+        group: ray.io
+        version: v1
+        kind: RayJob
+      statusDefinition:
+        phaseDefinition:
+          path: .status.jobStatus
+        conditionsDefinition:
+          path: .status.conditions
+          typeFieldName: type
+          statusFieldName: status
+          messageFieldName: message
+          reasonFieldName: reason
+        # Normalize Ray status so admission/telemetry see the same phases as other CRDs.
+        # Includes suspended — aligns with Kueue holding RayJobs until quota is free.
+        statusMappings:
+          initializing:
+            - byPhase: PENDING
+            - byExpression:
+                expression: .status.jobDeploymentStatus == "Initializing"
+                expectedResult: "true"
+          running:
+            - byPhase: RUNNING
+            - byConditions:
+                - type: Running
+                  status: "True"
+          completed:
+            - byPhase: SUCCEEDED
+            - byConditions:
+                - type: Complete
+                  status: "True"
+          failed:
+            - byPhase: FAILED
+            - byConditions:
+                - type: Failed
+                  status: "True"
+          suspended:
+            - byExpression:
+                expression: .status.jobDeploymentStatus == "Suspended"
+                expectedResult: "true"
+      # Same suspend field Kueue toggles when RayJob framework integration is enabled.
+      suspendDefinition:
+        suspendActions:
+          - path: .spec.suspend
+            value: "true"
+        resumeActions:
+          - path: .spec.suspend
+            value: "false"
+    # Compound paths: where KubeRay nests head + worker pod templates.
+    childComponents:
+      - name: head
+        kind:
+          group: ""
+          version: v1
+          kind: Pod
+        ownerRef: rayjob
+        specDefinition:
+          podTemplateSpecPath: .spec.rayClusterSpec.headGroupSpec.template
+        scaleDefinition:
+          replicasPath: "1"
+        podSelector:
+          componentTypeSelector:
+            keyPath: .metadata.labels["ray.io/node-type"]
+            value: head
+      - name: worker
+        kind:
+          group: ""
+          version: v1
+          kind: Pod
+        ownerRef: rayjob
+        specDefinition:
+          podTemplateSpecPath: .spec.rayClusterSpec.workerGroupSpecs[].template
+        scaleDefinition:
+          replicasPath: .spec.rayClusterSpec.workerGroupSpecs[].replicas // 1
+          minReplicasPath: .spec.rayClusterSpec.workerGroupSpecs[].minReplicas
+          maxReplicasPath: .spec.rayClusterSpec.workerGroupSpecs[].maxReplicas
+        instanceIdPath: .spec.rayClusterSpec.workerGroupSpecs[].groupName
+        podSelector:
+          componentTypeSelector:
+            keyPath: .metadata.labels["ray.io/node-type"]
+            value: worker
+          componentInstanceSelector:
+            idPath: .metadata.labels["ray.io/group"]
+  # PodGroup hierarchy — aligns with WG WAS / KEP-6012 CompositePodGroup direction.
+  # Admission (Kueue) and placement (scheduler/KAI) can share this portable language.
+  optimizationInstructions:
+    gangScheduling:
+      podGroups:
+        - name: job
+          members:
+            - componentName: head
+              groupByKeyPaths:
+                - .metadata.labels["ray.io/cluster"]
+            - componentName: worker
+              groupByKeyPaths:
+                - .metadata.labels["ray.io/cluster"]
+{{- end }}

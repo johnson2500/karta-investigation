@@ -1,0 +1,25 @@
+{{- if .Values.kueue.enabled }}
+# ClusterQueue with strict GPU nominalQuota — Layer 1 admission boundary.
+apiVersion: kueue.x-k8s.io/v1beta1
+kind: ClusterQueue
+metadata:
+  name: {{ .Values.kueue.clusterQueue.name }}
+  labels:
+    {{- include "karta-kueue-admission.labels" . | nindent 4 }}
+spec:
+  namespaceSelector: {}
+  resourceGroups:
+    - coveredResources:
+        - cpu
+        - memory
+        - nvidia.com/gpu
+      flavors:
+        - name: {{ .Values.kueue.resourceFlavor.name }}
+          resources:
+            - name: cpu
+              nominalQuota: {{ .Values.kueue.clusterQueue.nominalQuota.cpu | quote }}
+            - name: memory
+              nominalQuota: {{ .Values.kueue.clusterQueue.nominalQuota.memory | quote }}
+            - name: nvidia.com/gpu
+              nominalQuota: {{ index .Values.kueue.clusterQueue.nominalQuota "nvidia.com/gpu" | quote }}
+{{- end }}

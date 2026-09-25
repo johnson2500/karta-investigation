@@ -1,0 +1,109 @@
+{{- if and .Values.karta.enabled .Values.karta.pytorchJob.enabled }}
+# =============================================================================
+# Karta map for kubeflow.org/v1 PyTorchJob — decoupled from KAI
+# =============================================================================
+# What this CR is: schema translation for Training Operator's compound PyTorchJob.
+# Works with ANY scheduler that binds pods (default-scheduler, Volcano, or KAI).
+#
+# Jira answer this map supports: there is NO hard dependency on KAI.
+# Karta registers paths; pods schedule via whatever schedulerName the workload uses.
+#
+# Adapted from dsx-ai-factory/workload-map docs/catalog/kubeflow-org-pytorchjob-v1.yaml
+# =============================================================================
+apiVersion: run.ai/v1alpha1
+kind: Karta
+metadata:
+  name: {{ .Values.karta.pytorchJob.name }}
+  labels:
+    {{- include "karta-decoupled-scheduler.labels" . | nindent 4 }}
+spec:
+  structureDefinition:
+    rootComponent:
+      name: pytorchjob
+      kind:
+        group: kubeflow.org
+        version: v1
+        kind: PyTorchJob
+      statusDefinition:
+        conditionsDefinition:
+          path: .status.conditions
+          typeFieldName: type
+          statusFieldName: status
+          messageFieldName: message
+          reasonFieldName: reason
+        # Training Operator conditions → portable phases (same vocabulary as Job/Ray maps).
+        statusMappings:
+          initializing:
+            - byConditions:
+                - type: Created
+                  status: "True"
+          running:
+            - byConditions:
+                - type: Running
+                  status: "True"
+          completed:
+            - byConditions:
+                - type: Succeeded
+                  status: "True"
+          failed:
+            - byConditions:
+                - type: Failed
+                  status: "True"
+          suspended:
+            - byConditions:
+                - type: Suspended
+                  status: "True"
+      # NOTE: PyTorchJob suspend lives under runPolicy — NOT .spec.suspend like Job/RayJob.
+      suspendDefinition:
+        suspendActions:
+          - path: .spec.runPolicy.suspend
+            value: "true"
+        resumeActions:
+          - path: .spec.runPolicy.suspend
+            value: "false"
+    # childComponents: Master + Worker replica specs (compound Training Operator shape).
+    childComponents:
+      - name: master
+        kind:
+          group: ""
+          version: v1
+          kind: Pod
+        ownerRef: pytorchjob
+        specDefinition:
+          podTemplateSpecPath: .spec.pytorchReplicaSpecs.Master.template
+        scaleDefinition:
+          replicasPath: .spec.pytorchReplicaSpecs.Master.replicas // 1
+        podSelector:
+          componentTypeSelector:
+            keyPath: .metadata.labels["training.kubeflow.org/replica-type"]
+            value: master
+      - name: worker
+        kind:
+          group: ""
+          version: v1
+          kind: Pod
+        ownerRef: pytorchjob
+        specDefinition:
+          podTemplateSpecPath: .spec.pytorchReplicaSpecs.Worker.template
+        scaleDefinition:
+          replicasPath: .spec.pytorchReplicaSpecs.Worker.replicas // 1
+          minReplicasPath: .spec.elasticPolicy.minReplicas
+          maxReplicasPath: .spec.elasticPolicy.maxReplicas
+        podSelector:
+          componentTypeSelector:
+            keyPath: .metadata.labels["training.kubeflow.org/replica-type"]
+            value: worker
+  # Gang hint: co-schedule master+workers that share the Training Operator job-name label.
+  # Consumers (EWI, WAS) may materialize PodGroup views from this — placement stays pluggable.
+  optimizationInstructions:
+    gangScheduling:
+      podGroups:
+        - name: job
+          members:
+            - componentName: master
+              groupByKeyPaths:
+                - .metadata.labels["training.kubeflow.org/job-name"]
+            - componentName: worker
+              groupByKeyPaths:
+                - .metadata.labels["training.kubeflow.org/job-name"]
+{{- end }}

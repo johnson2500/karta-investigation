@@ -1,0 +1,54 @@
+# Build context MUST be the run-ai-karta repository root (not this directory).
+# Sibling demos are copied into the image for presentations + runthrough labs.
+#
+# From repo root:
+#   podman build -f examples/karta-demo-hub/Containerfile -t karta-demo-hub:0.1.0 .
+# From this chart directory:
+#   ./scripts/build-image.sh
+#   # or: podman build -f Containerfile -t karta-demo-hub:0.1.0 ../..
+FROM python:3.12-slim
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PORT=8080 \
+    CATALOG_PATH=/app/data/catalog.json \
+    CONTENT_ROOT=/app/content \
+    ENABLED_DEMOS_PATH=/app/config/enabled.json
+
+WORKDIR /app
+
+RUN useradd --create-home --uid 1001 --shell /sbin/nologin appuser \
+    && mkdir -p /app/data /app/content /app/config \
+    && chown -R appuser:appuser /app
+
+COPY examples/karta-demo-hub/requirements.txt /app/requirements.txt
+RUN pip install --no-cache-dir -r /app/requirements.txt
+
+COPY examples/karta-demo-hub/app /app/app
+COPY examples/karta-demo-hub/catalog.json /app/data/catalog.json
+
+# Bake demo content (presentations + runthrough labs)
+COPY examples/karta-grove-kueue/presentation /app/content/karta-grove-kueue/presentation
+COPY examples/karta-grove-kueue/karta-grove-kueue-runthrough.md /app/content/karta-grove-kueue/karta-grove-kueue-runthrough.md
+
+COPY examples/karta-rayjob-compound-crd/presentation /app/content/karta-rayjob-compound-crd/presentation
+COPY examples/karta-rayjob-compound-crd/karta-rayjob-compound-crd-runthrough.md /app/content/karta-rayjob-compound-crd/karta-rayjob-compound-crd-runthrough.md
+
+COPY examples/karta-decoupled-scheduler/presentation /app/content/karta-decoupled-scheduler/presentation
+COPY examples/karta-decoupled-scheduler/karta-decoupled-scheduler-runthrough.md /app/content/karta-decoupled-scheduler/karta-decoupled-scheduler-runthrough.md
+
+COPY examples/karta-kueue-admission/presentation /app/content/karta-kueue-admission/presentation
+COPY examples/karta-kueue-admission/karta-kueue-admission-runthrough.md /app/content/karta-kueue-admission/karta-kueue-admission-runthrough.md
+
+COPY examples/karta-kueue-dra/presentation /app/content/karta-kueue-dra/presentation
+COPY examples/karta-kueue-dra/karta-kueue-dra-runthrough.md /app/content/karta-kueue-dra/karta-kueue-dra-runthrough.md
+
+COPY examples/karta-openshift-workload-api/presentation /app/content/karta-openshift-workload-api/presentation
+COPY examples/karta-openshift-workload-api/karta-openshift-workload-api-runthrough.md /app/content/karta-openshift-workload-api/karta-openshift-workload-api-runthrough.md
+
+RUN chown -R appuser:appuser /app
+
+USER 1001
+EXPOSE 8080
+
+CMD ["python", "-m", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8080"]

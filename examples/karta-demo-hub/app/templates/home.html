@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% block title %}Karta demo gallery{% endblock %}
+{% block content %}
+<section class="panel">
+  <h1>Shared operators</h1>
+  {% if not cluster_available %}
+  <p class="hint">Cluster API unavailable from this pod — badges show unknown. Outside the cluster this is expected when running locally without kubeconfig.</p>
+  {% endif %}
+  <ul class="badge-row">
+    {% for op in operators %}
+    <li class="badge {% if op.ready == true %}ok{% elif op.ready == false %}bad{% else %}unk{% endif %}{% if op.optional %} optional{% endif %}">
+      <span class="badge-label">{{ op.label }}</span>
+      <span class="badge-state">
+        {% if op.ready == true %}ready{% elif op.ready == false %}missing{% else %}unknown{% endif %}
+        {% if op.optional %} (optional){% endif %}
+      </span>
+    </li>
+    {% endfor %}
+  </ul>
+</section>
+
+<section class="panel">
+  <h1>Demos</h1>
+  <p class="hint">Open a demo to walk the lab steps, view the presentation, then install its Helm chart when ready.</p>
+  <ol class="demo-list">
+    {% for demo in demos %}
+    <li class="demo-card">
+      <div class="demo-card-head">
+        <span class="demo-order">{{ demo.order }}</span>
+        <a href="/demos/{{ demo.id }}"><h2>{{ demo.title }}</h2></a>
+      </div>
+      <p>{{ demo.blurb }}</p>
+      <p class="meta">
+        release <code>{{ demo.release }}</code> · namespace <code>{{ demo.namespace }}</code>
+        {% if demo.status.namespaceExists == true %}
+          · <span class="ok-text">namespace present</span>
+          {% if demo.status.podCount is not none %} ({{ demo.status.podCount }} pods){% endif %}
+        {% elif demo.status.namespaceExists == false %}
+          · <span class="muted">not installed yet</span>
+        {% endif %}
+      </p>
+      <p class="meta">needs:
+        {% for os in demo.operatorStatuses %}
+          <span class="{% if os.ready == true %}ok-text{% elif os.ready == false %}bad-text{% else %}muted{% endif %}">{{ os.label }}</span>{% if not loop.last %},{% endif %}
+        {% endfor %}
+      </p>
+      <a class="btn" href="/demos/{{ demo.id }}">Open demo</a>
+    </li>
+    {% endfor %}
+  </ol>
+</section>
+{% endblock %}

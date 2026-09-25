@@ -1,0 +1,26 @@
+{{- if and .Values.workloadApi.enabled .Values.workloadApi.workload.enabled }}
+# Native Kubernetes / OpenShift Workload API — gang placement without KAI.
+# API group: scheduling.k8s.io (v1alpha1 → v1beta1 depending on cluster version).
+# Feature gates: GenericWorkload (+ GangScheduling for all-or-nothing).
+#
+# If `oc get crd workloads.scheduling.k8s.io` fails, set ONLY
+# workloadApi.workload.enabled=false — keep gangJob.enabled so Kueue still demos.
+apiVersion: scheduling.k8s.io/v1beta1
+kind: Workload
+metadata:
+  name: {{ .Values.workloadApi.workload.name }}
+  labels:
+    {{- include "karta-openshift-workload-api.labels" . | nindent 4 }}
+    demo.openshift.ai/role: kai-alternative
+spec:
+  controllerRef:
+    apiGroup: batch
+    kind: Job
+    name: {{ .Values.workloadApi.gangJob.name }}
+  podGroupTemplates:
+    - name: {{ .Values.workloadApi.workload.templateName }}
+      schedulingPolicy:
+        gang:
+          # All-or-nothing: bind only when minCount peers can schedule together.
+          minCount: {{ .Values.workloadApi.workload.minCount }}
+{{- end }}

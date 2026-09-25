@@ -1,0 +1,57 @@
+{{- if and .Values.workloadApi.enabled .Values.workloadApi.gangJob.enabled }}
+# Gang-shaped batch Job admitted by Kueue, placed by kube-scheduler Workload API.
+# Replaces the Run:ai path where KAI would own topology / gang PodGroups.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ .Values.workloadApi.gangJob.name }}
+  labels:
+    {{- include "karta-openshift-workload-api.labels" . | nindent 4 }}
+    app.openshift.io/runtime: batch
+    kueue.x-k8s.io/queue-name: {{ .Values.kueue.localQueue.name }}
+  annotations:
+    # Contract hints for platforms / Karta consumers aligning with WG WAS /
+    # KEP-6012 CompositePodGroup — not KAI PodGroup targets.
+    scheduling.k8s.io/workload-name: {{ .Values.workloadApi.workload.name | quote }}
+    scheduling.k8s.io/pod-group-template: {{ .Values.workloadApi.workload.templateName | quote }}
+    demo.openshift.ai/placement: kube-scheduler-workload-api
+    demo.openshift.ai/no-kai: "true"
+spec:
+  parallelism: {{ .Values.workloadApi.gangJob.parallelism }}
+  completions: {{ .Values.workloadApi.gangJob.completions }}
+  suspend: true
+  template:
+    metadata:
+      labels:
+        {{- include "karta-openshift-workload-api.selectorLabels" . | nindent 8 }}
+        batch.kubernetes.io/job-name: {{ .Values.workloadApi.gangJob.name }}
+      annotations:
+        scheduling.k8s.io/workload-name: {{ .Values.workloadApi.workload.name | quote }}
+        scheduling.k8s.io/pod-group-template: {{ .Values.workloadApi.workload.templateName | quote }}
+    spec:
+      restartPolicy: Never
+      # Explicit OpenShift / kube default — never default-scheduler-kai.
+      schedulerName: default-scheduler
+      # When WorkloadWithJob is enabled on the Job controller, native
+      # `.spec.scheduling` can replace annotations. Kept as comments for
+      # clusters that only have GenericWorkload + Workload CR today:
+      #
+      # scheduling:
+      #   schedulingPolicy:
+      #     gang:
+      #       minCount: {{ .Values.workloadApi.workload.minCount }}
+      containers:
+        - name: worker
+          image: {{ .Values.workloadApi.gangJob.image | quote }}
+          command:
+            {{- toYaml .Values.workloadApi.gangJob.command | nindent 12 }}
+          resources:
+            {{- toYaml .Values.workloadApi.gangJob.resources | nindent 12 }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+            runAsNonRoot: true
+            seccompProfile:
+              type: RuntimeDefault
+{{- end }}

@@ -1,0 +1,31 @@
+Karta + Kueue + DRA showcase ({{ .Release.Name }})
+
+Layers in namespace {{ .Release.Namespace }}:
+  Layer 1 Admission (Kueue) → Layer 2 Translation (Karta) → Layer 3 DRA + kube-scheduler
+
+{{- if and .Values.karta.enabled .Values.karta.batchJob.enabled }}
+  - Karta map: {{ .Values.karta.batchJob.name }}
+{{- end }}
+{{- if .Values.kueue.enabled }}
+  - ClusterQueue: {{ .Values.kueue.clusterQueue.name }} (DRA quota {{ index .Values.kueue.clusterQueue.nominalQuota "example.com/gpu" }} × example.com/gpu)
+  - LocalQueue: {{ .Values.kueue.localQueue.name }}
+{{- end }}
+{{- if .Values.dra.enabled }}
+  - DeviceClass: {{ .Values.dra.deviceClass.name }}
+  - ResourceClaimTemplate: {{ .Values.dra.resourceClaimTemplate.name }}
+{{- end }}
+{{- range .Values.sampleJobs }}
+{{- if .enabled }}
+  - Job: {{ .name }}
+{{- end }}
+{{- end }}
+
+Quick checks:
+  oc get karta {{ .Values.karta.batchJob.name }} -o yaml | head -80
+  oc get clusterqueue {{ .Values.kueue.clusterQueue.name }}
+  oc get workloads -n {{ .Release.Namespace }}
+  oc get resourceclaimtemplate -n {{ .Release.Namespace }}
+  oc get jobs -n {{ .Release.Namespace }}
+
+Note: Full DRA allocation needs a DRA-enabled cluster + device driver.
+Admission queuing still demonstrates without real GPUs (second Job Pending on quota).

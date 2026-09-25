@@ -1,0 +1,22 @@
+{{- if .Values.kueue.enabled }}
+apiVersion: kueue.x-k8s.io/v1beta1
+kind: ClusterQueue
+metadata:
+  name: {{ .Values.kueue.clusterQueue.name }}
+  labels:
+    {{- include "karta-openshift-workload-api.labels" . | nindent 4 }}
+spec:
+  namespaceSelector: {}
+  resourceGroups:
+    - coveredResources:
+        {{- range $key, $_ := .Values.kueue.clusterQueue.nominalQuota }}
+        - {{ $key | quote }}
+        {{- end }}
+      flavors:
+        - name: {{ .Values.kueue.resourceFlavor.name }}
+          resources:
+            {{- range $key, $val := .Values.kueue.clusterQueue.nominalQuota }}
+            - name: {{ $key | quote }}
+              nominalQuota: {{ $val | quote }}
+            {{- end }}
+{{- end }}

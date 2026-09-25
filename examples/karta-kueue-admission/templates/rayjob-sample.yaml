@@ -1,0 +1,110 @@
+{{- if .Values.kueue.enabled }}
+{{- range .Values.rayJobs }}
+{{- if .enabled }}
+---
+# Karta-managed RayJob admitted through Kueue LocalQueue (Layer 1 → Layer 2 → Layer 3).
+apiVersion: ray.io/v1
+kind: RayJob
+metadata:
+  name: {{ .name }}
+  labels:
+    {{- include "karta-kueue-admission.labels" $ | nindent 4 }}
+    # Routes this RayJob to the LocalQueue (required for Kueue admission).
+    kueue.x-k8s.io/queue-name: {{ $.Values.kueue.localQueue.name }}
+    app.openshift.io/runtime: ray
+  annotations:
+    # Illustrative CompositePodGroup hint (KEP-6012 / WG WAS alignment).
+    karta.run.ai/podgroup-name: {{ .name }}-job
+    karta.run.ai/podgroup-members: head,worker
+spec:
+  # Kueue holds the RayJob here until ClusterQueue has GPU quota.
+  suspend: true
+  entrypoint: {{ .entrypoint | quote }}
+  shutdownAfterJobFinishes: {{ .shutdownAfterJobFinishes }}
+  ttlSecondsAfterFinished: {{ .ttlSecondsAfterFinished }}
+  rayClusterSpec:
+    rayVersion: "2.46.0"
+    headGroupSpec:
+      rayStartParams:
+        dashboard-host: "0.0.0.0"
+      template:
+        metadata:
+          labels:
+            {{- include "karta-kueue-admission.selectorLabels" $ | nindent 12 }}
+          annotations:
+            karta.run.ai/component: head
+        spec:
+          {{- if .openshiftRestricted }}
+          securityContext:
+            runAsNonRoot: true
+            seccompProfile:
+              type: RuntimeDefault
+          {{- end }}
+          containers:
+            - name: ray-head
+              image: {{ .image | quote }}
+              resources:
+                requests:
+                  cpu: {{ .cpu | quote }}
+                  memory: {{ .memory | quote }}
+                  {{- if .gpus }}
+                  nvidia.com/gpu: {{ .gpus | quote }}
+                  {{- end }}
+                limits:
+                  cpu: {{ .cpu | quote }}
+                  memory: {{ .memory | quote }}
+                  {{- if .gpus }}
+                  nvidia.com/gpu: {{ .gpus | quote }}
+                  {{- end }}
+              {{- if .openshiftRestricted }}
+              securityContext:
+                allowPrivilegeEscalation: false
+                capabilities:
+                  drop:
+                    - ALL
+                runAsNonRoot: true
+                seccompProfile:
+                  type: RuntimeDefault
+              {{- end }}
+    workerGroupSpecs:
+      - groupName: gpu-workers
+        replicas: 1
+        minReplicas: 1
+        maxReplicas: 1
+        rayStartParams: {}
+        template:
+          metadata:
+            labels:
+              {{- include "karta-kueue-admission.selectorLabels" $ | nindent 14 }}
+            annotations:
+              karta.run.ai/component: worker
+          spec:
+            {{- if .openshiftRestricted }}
+            securityContext:
+              runAsNonRoot: true
+              seccompProfile:
+                type: RuntimeDefault
+            {{- end }}
+            containers:
+              - name: ray-worker
+                image: {{ .image | quote }}
+                resources:
+                  requests:
+                    cpu: {{ .cpu | quote }}
+                    memory: {{ .memory | quote }}
+                  limits:
+                    cpu: {{ .cpu | quote }}
+                    memory: {{ .memory | quote }}
+                {{- if .openshiftRestricted }}
+                securityContext:
+                  allowPrivilegeEscalation: false
+                  capabilities:
+                    drop:
+                      - ALL
+                  runAsNonRoot: true
+                  seccompProfile:
+                    type: RuntimeDefault
+                {{- end }}
+{{- end }}
+{{- end }}
+{{- end }}

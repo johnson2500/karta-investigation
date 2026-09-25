@@ -1,0 +1,34 @@
+# Sample CRs only. Install operators first via scripts/install-operators.sh.
+
+nameOverride: ""
+fullnameOverride: ""
+
+# Karta map: declarative schema for ray.io/v1 RayJob (head + workers).
+karta:
+  enabled: true
+  rayJob:
+    enabled: true
+    # Chart-prefixed: cluster-scoped Karta CRs cannot be shared across Helm releases.
+    name: compound-ray-io-rayjob-v1
+
+# Sample RayJob submitted after KubeRay + Karta are installed.
+rayJob:
+  enabled: true
+  name: rayjob-compound-demo
+  # Short-lived CPU-only demo; swap image/resources for GPU nodes as needed.
+  image: rayproject/ray:2.46.0-py312
+  entrypoint: python -c "import ray; ray.init(); print('karta-rayjob-ok'); ray.shutdown()"
+  shutdownAfterJobFinishes: true
+  ttlSecondsAfterFinished: 120
+  head:
+    cpu: "500m"
+    memory: 1Gi
+  worker:
+    groupName: small-group
+    replicas: 1
+    minReplicas: 1
+    maxReplicas: 1
+    cpu: "500m"
+    memory: 1Gi
+  # OpenShift restricted-v2–friendly pod security (toggle off for privileged Ray images).
+  openshiftRestricted: true

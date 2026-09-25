@@ -1,0 +1,12 @@
+# Helm chart: OpenShift-native alternative to the Run:ai / KAI stack.
+# Karta (schema map) + Grove (clique topology) + Kueue (admission) +
+# kube-scheduler Workload API (gang / placement) — no secondary KAI binary.
+# Does not install operators; pair with scripts/install-operators.sh.
+apiVersion: v2
+name: karta-openshift-workload-api
+description: >-
+  OpenShift AI stack alternative — Karta + Grove + Kueue + Workload API
+  without KAI / Run:ai control plane
+type: application
+version: 0.1.0
+appVersion: "0.1.0"

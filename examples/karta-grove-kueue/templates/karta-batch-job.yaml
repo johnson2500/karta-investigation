@@ -1,0 +1,97 @@
+{{- if and .Values.karta.enabled .Values.karta.batchJob.enabled }}
+# =============================================================================
+# Karta map for batch/v1 Job
+# =============================================================================
+# What this CR is: a declarative "schema map" — not a scheduler, not a queue.
+# Platforms (EWI, future Kueue mappers, telemetry) read these JQ/JSON paths to
+# understand every batch/v1 Job the same way, without hard-coding Job schema in Go.
+#
+# Covers every sample Job in this chart (generic kueue-demo-job + OpenShift-styled
+# openshift-batch-job). One map per API kind — not one map per Job name.
+#
+# Adapted from dsx-ai-factory/karta docs/catalog/batch-job-v1.yaml
+# =============================================================================
+apiVersion: run.ai/v1alpha1
+kind: Karta
+metadata:
+  name: {{ .Values.karta.batchJob.name }}
+  labels:
+    {{- include "karta-grove-kueue.labels" . | nindent 4 }}
+spec:
+  # structureDefinition: "where does everything live on this CRD?"
+  structureDefinition:
+    rootComponent:
+      name: job
+      kind:
+        group: batch
+        version: v1
+        kind: Job
+      # Pod template lives directly on the Job (unlike Grove's nested cliques
+      # or RayJob's rayClusterSpec head/worker templates).
+      specDefinition:
+        podTemplateSpecPath: .spec.template
+      scaleDefinition:
+        # // 1 = default parallelism when unset (single-pod Job).
+        replicasPath: .spec.parallelism // 1
+      statusDefinition:
+        conditionsDefinition:
+          path: .status.conditions
+          typeFieldName: type
+          statusFieldName: status
+          messageFieldName: message
+          reasonFieldName: reason
+        # statusMappings: normalize Job conditions/expressions → portable phases
+        # platforms understand (same vocabulary as RayJob / PodCliqueSet maps).
+        statusMappings:
+          initializing:
+            - byExpression:
+                expression: (.status.active // 0) > 0 and (.status.ready // 0) == 0
+                expectedResult: "true"
+          running:
+            - byExpression:
+                expression: (.status.active // 0) > 0 and (.status.ready // 0) > 0
+                expectedResult: "true"
+          completed:
+            - byConditions:
+                - type: Complete
+                  status: "True"
+            - byConditions:
+                - type: SuccessCriteriaMet
+                  status: "True"
+          failed:
+            - byConditions:
+                - type: Failed
+                  status: "True"
+            - byConditions:
+                - type: FailureTarget
+                  status: "True"
+          degraded:
+            - byExpression:
+                expression: .spec.parallelism > 1 and (.status.ready // 0) < .spec.parallelism and ((.status.succeeded // 0) > 0 or (.status.failed // 0) > 0)
+                expectedResult: "true"
+          # Aligns with Kueue holding Jobs via Suspended until quota is free.
+          suspended:
+            - byConditions:
+                - type: Suspended
+                  status: "True"
+      # suspendDefinition: how a controller should pause/resume this workload type.
+      # Same field Kueue flips when admitting/releasing Jobs (.spec.suspend).
+      suspendDefinition:
+        suspendActions:
+          - path: .spec.suspend
+            value: "true"
+        resumeActions:
+          - path: .spec.suspend
+            value: "false"
+  # optimizationInstructions: scheduling / gang hints (not placement itself).
+  # Aligns with WG WAS / KEP-6012 CompositePodGroup — portable PodGroup hierarchy.
+  optimizationInstructions:
+    gangScheduling:
+      podGroups:
+        - name: job
+          members:
+            - componentName: job
+              # Group all pods belonging to this Job instance for co-scheduling views.
+              groupByKeyPaths:
+                - .metadata.labels["batch.kubernetes.io/job-name"]
+{{- end }}

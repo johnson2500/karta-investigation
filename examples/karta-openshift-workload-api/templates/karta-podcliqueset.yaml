@@ -1,0 +1,116 @@
+{{- if and .Values.karta.enabled .Values.karta.grovePodCliqueSet.enabled }}
+# =============================================================================
+# Karta map for Grove PodCliqueSet — OpenShift AI path (no KAI)
+# =============================================================================
+# Schema translation only. Grove shapes cliques; kube-scheduler + Workload API
+# place; Kueue admits. Platforms consume these paths instead of hard-coding Grove.
+#
+# Portable PodGroup hierarchy targets Workload API / KEP-6012 CompositePodGroup —
+# not KAI PodGroups. Install script never pulls KAI.
+# =============================================================================
+apiVersion: run.ai/v1alpha1
+kind: Karta
+metadata:
+  name: {{ .Values.karta.grovePodCliqueSet.name }}
+  labels:
+    {{- include "karta-openshift-workload-api.labels" . | nindent 4 }}
+spec:
+  structureDefinition:
+    # Root kind users submit.
+    rootComponent:
+      name: podcliqueset
+      kind:
+        group: grove.io
+        version: v1alpha1
+        kind: PodCliqueSet
+      statusDefinition:
+        conditionsDefinition:
+          path: .status.conditions
+          typeFieldName: type
+          statusFieldName: status
+          messageFieldName: message
+          reasonFieldName: reason
+        statusMappings:
+          initializing:
+            - byExpression:
+                expression: (.spec.replicas // 0) > 0 and (.status.availableReplicas // 0) < (.spec.replicas // 0)
+                expectedResult: "true"
+          running:
+            - byExpression:
+                expression: (.status.availableReplicas // 0) >= (.spec.replicas // 0)
+                expectedResult: "true"
+          failed:
+            - byConditions:
+                - type: TopologyLevelsUnavailable
+                  status: "True"
+    # Children Grove creates; fragmented paths because PCS nests pod fields per clique.
+    childComponents:
+      - name: clique
+        kind:
+          group: grove.io
+          version: v1alpha1
+          kind: PodClique
+        ownerRef: podcliqueset
+        specDefinition:
+          fragmentedPodSpecDefinition:
+            # Includes schedulerName so demos can pin default-scheduler (no KAI).
+            schedulerNamePath: .spec.template.cliques[].spec.podSpec.schedulerName
+            labelsPath: .spec.template.cliques[].labels
+            annotationsPath: .spec.template.cliques[].annotations
+            resourceClaimsPath: .spec.template.cliques[].spec.podSpec.resourceClaims
+            podAffinityPath: .spec.template.cliques[].spec.podSpec.affinity.podAffinity
+            nodeAffinityPath: .spec.template.cliques[].spec.podSpec.affinity.nodeAffinity
+            containersPath: .spec.template.cliques[].spec.podSpec.containers
+            priorityClassNamePath: .spec.template.cliques[].spec.podSpec.priorityClassName
+        scaleDefinition:
+          replicasPath: (.spec.replicas // 1) * (.spec.template.cliques[].spec.replicas // 1)
+          minReplicasPath: .spec.template.cliques[].spec.autoScalingConfig.minReplicas
+          maxReplicasPath: .spec.template.cliques[].spec.autoScalingConfig.maxReplicas
+        instanceIdPath: .spec.template.cliques[].name
+        podSelector:
+          componentInstanceSelector:
+            idPath: .metadata.labels["grove.io/podclique"]
+          replicaSelector:
+            keyPath: .metadata.labels["grove.io/podcliqueset-replica-index"]
+      - name: scalinggroup
+        kind:
+          group: grove.io
+          version: v1alpha1
+          kind: PodCliqueScalingGroup
+        ownerRef: podcliqueset
+        scaleDefinition:
+          replicasPath: (.spec.replicas // 1) * (.spec.template.podCliqueScalingGroups[].replicas // 1)
+          minReplicasPath: .spec.template.podCliqueScalingGroups[].scaleConfig.minReplicas
+          maxReplicasPath: .spec.template.podCliqueScalingGroups[].scaleConfig.maxReplicas
+        instanceIdPath: .spec.template.podCliqueScalingGroups[].name
+        podSelector:
+          componentInstanceSelector:
+            idPath: .metadata.labels["grove.io/podcliquescalinggroup"]
+          replicaSelector:
+            keyPath: .metadata.labels["grove.io/podcliquescalinggroup-replica-index"]
+    additionalChildKinds:
+      - group: grove.io
+        version: v1alpha1
+        kind: PodClique
+      - group: grove.io
+        version: v1alpha1
+        kind: PodCliqueScalingGroup
+      - group: scheduler.grove.io
+        version: v1alpha1
+        kind: PodGang
+  # Portable PodGroup hierarchy — consumers are kube-scheduler Workload API /
+  # KEP-6012 CompositePodGroup, not KAI PodGroups.
+  optimizationInstructions:
+    gangScheduling:
+      podGroups:
+        - name: podcliqueset-replica
+          members:
+            - componentName: clique
+              groupByKeyPaths:
+                - .metadata.labels["app.kubernetes.io/part-of"]
+                - .metadata.labels["grove.io/podcliqueset-replica-index"]
+            - componentName: scalinggroup
+              groupByKeyPaths:
+                - .metadata.labels["app.kubernetes.io/part-of"]
+                - .metadata.labels["grove.io/podcliqueset-replica-index"]
+{{- end }}
