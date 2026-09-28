@@ -1,0 +1,8 @@
+# Gitleaks config — allow detect-secrets baseline (contains hashed_secret digests).
+title = "karta-investigation"
+
+[allowlist]
+description = "False positives / tooling artifacts"
+paths = [
+  '''(^|/)\.secrets\.baseline$''',
+]

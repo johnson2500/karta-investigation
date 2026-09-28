@@ -8,6 +8,8 @@ repos:
     rev: v8.18.0
     hooks:
       - id: gitleaks
+        # Baseline file stores SHA hashes of known findings; gitleaks flags those strings.
+        exclude: (^|/)\.secrets\.baseline$
 
   # detect-secrets hook checks against baseline
   - repo: https://github.com/Yelp/detect-secrets
