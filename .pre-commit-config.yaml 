@@ -1,0 +1,20 @@
+# .pre-commit-config.yaml
+# Run 'pre-commit install' to enable hooks after creating this file
+
+repos:
+  # Gitleaks hook scans staged changes for secrets
+  # The hook's default entry already runs 'gitleaks protect --verbose --redact --staged'
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.18.0
+    hooks:
+      - id: gitleaks
+
+  # detect-secrets hook checks against baseline
+  - repo: https://github.com/Yelp/detect-secrets
+    rev: v1.4.0
+    hooks:
+      - id: detect-secrets
+        # Reference the baseline file to ignore known false positives
+        args: ["--baseline", ".secrets.baseline"]
+        # Exclude test fixtures that contain fake secrets
+        exclude: ".*/tests/fixtures/.*"
