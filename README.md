@@ -2,6 +2,45 @@
 
 Investigation into Karta (Workload-Map).
 
+## Secret scanning (gitleaks + detect-secrets)
+
+This repo uses [pre-commit](https://pre-commit.com/) to block commits that introduce secrets. Hooks:
+
+- **gitleaks** — scans staged changes for leaked credentials ([`.gitleaks.toml`](.gitleaks.toml) allowlists tooling artifacts such as `.secrets.baseline`)
+- **detect-secrets** — compares against [`.secrets.baseline`](.secrets.baseline) so known false positives stay quiet
+
+### One-time setup
+
+```bash
+# From the repo root
+python3 -m pip install --user pre-commit   # or: brew install pre-commit
+pre-commit install
+
+# Confirm config is present (filename must be exactly .pre-commit-config.yaml — no trailing spaces)
+ls -la .pre-commit-config.yaml .gitleaks.toml .secrets.baseline
+```
+
+### Everyday use
+
+Hooks run automatically on `git commit`. To run them on demand:
+
+```bash
+pre-commit run --all-files
+# Or only gitleaks:
+pre-commit run gitleaks --all-files
+```
+
+### Refreshing the detect-secrets baseline
+
+After adding intentional test fixtures that look like secrets (or clearing a false positive):
+
+```bash
+# Prefer the detect-secrets from the pre-commit env, or: pip install detect-secrets
+detect-secrets scan > .secrets.baseline
+git add .secrets.baseline
+```
+
+Then commit as usual. Do **not** put real credentials in the repo; if gitleaks fails on a real key, rotate it and remove it from history.
 
 ## Examples
 
